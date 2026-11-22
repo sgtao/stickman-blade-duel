@@ -898,7 +898,7 @@
     handleEvents(evs);
     // Blade trails
     for (let i = 0; i < 2; i++) {
-      const p = pose(m.f[i]);
+      const p = pose(m.f[i], true); // 軌跡は補正前の座標を使う
       const tr = S.trails[i];
       tr.push({ bx: p.hand[0], by: p.hand[1], tx: p.tip[0], ty: p.tip[1] });
       if (tr.length > 9) tr.shift();
@@ -940,7 +940,7 @@
     return [[ax + Math.cos(base) * l1, ay + Math.sin(base) * l1], [bx, by]];
   }
   // Returns joints in world coordinates. Local frame: +x = facing direction.
-  function pose(f) {
+  function pose(f, raw) {
     const dir = f.facing;
     const t = f.sf;
     const g = (lx, ly) => [f.x + lx * dir, f.y + ly];
@@ -1001,7 +1001,25 @@
     const BL = 112;
     const hilt = [hand[0] - Math.cos(ang) * 14, hand[1] - Math.sin(ang) * 14];
     const tip = [hand[0] + Math.cos(ang) * BL, hand[1] + Math.sin(ang) * BL];
-    return { hip, neck, head, shoulder, elbow, hand, elbow2: arm2[0], hand2: arm2[1], kneeA: legA[0], footA: legA[1], kneeB: legB[0], footB: legB[1], hilt, tip };
+    const out = { hip, neck, head, shoulder, elbow, hand, elbow2: arm2[0], hand2: arm2[1], kneeA: legA[0], footA: legA[1], kneeB: legB[0], footB: legB[1], hilt, tip };
+    // 倒れた姿勢（ko）が画面の外へ出るときだけ、描画の x をずらして画面の内側に入れる（raw のときはずらさない）。
+    // 外接は描く点で取る。余白は頭が半径 13、刃の先が光の幅 14、その他の線 5。
+    // 刃を含める重み wt は sf で連続に変える（sf 20 以下で 1、sf 40 以上で 0）。刃を含む外接と含まない外接を wt で混ぜるので、
+    // sf 1 あたりの跳びは 20 sf に広げた分だけ小さくなる（sf 40 以上の結果は刃を含まない外接と同じ）
+    if (f.state === 'ko' && !raw) {
+      const wt = Math.min(1, Math.max(0, (40 - f.sf) / 20));
+      let loB = Infinity, hiB = -Infinity, loA = Infinity, hiA = -Infinity;
+      for (const k of Object.keys(out)) {
+        const m = k === 'head' ? 13 : k === 'tip' ? 14 : 5;
+        const l = out[k][0] - m, h = out[k][0] + m;
+        loA = Math.min(loA, l); hiA = Math.max(hiA, h);
+        if (k !== 'tip') { loB = Math.min(loB, l); hiB = Math.max(hiB, h); }
+      }
+      const lo = loB + wt * (loA - loB), hi = hiB + wt * (hiA - hiB);
+      const dx = lo < 0 ? -lo : (hi > W ? W - hi : 0);
+      if (dx) for (const k in out) out[k] = [out[k][0] + dx, out[k][1]];
+    }
+    return out;
   }
 
   // ---------- Backgrounds ----------
@@ -1410,7 +1428,7 @@
 
   // ---------- Test hooks ----------
   window.__game = {
-    S, BG, MOON, debug, perf, Sfx, pressLog,
+    S, BG, MOON, debug, perf, Sfx, pressLog, pose,
     state() {
       const m = S.match;
       return { screen: S.screen, level: S.level, timeScale: S.timeScale, shake: S.shake, parts: S.parts.length, bolts: S.bolts.length,
