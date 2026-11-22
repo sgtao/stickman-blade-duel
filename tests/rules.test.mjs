@@ -45,4 +45,17 @@ function finishRound(m, winner) { // winner: 0, 1, 'draw'
 { const m = fightReady(); m.paused = true; const fr = m.frame, x = m.f[0].x; run(m, 30, () => inp({ right: true }));
   check('一時停止：止めている間は進まない', m.frame === fr && m.f[0].x === x); m.paused = false; run(m, 5, () => inp({ right: true })); check('一時停止：解除で再開', m.frame === fr + 5); }
 { const m = fightReady(); check('背景：1 ラウンド目は宇宙の街', m.stage() === 'space'); finishRound(m, 0); while (m.phase !== 'intro') m.step([E(), E()]); check('背景：2 ラウンド目は火山', m.stage() === 'volcano'); }
+// M10（B3・B4）：斜めジャンプと必殺のゲージ条件
+{ const m = fightReady(); place(m, 400, 900); const x0 = m.f[0].x; let minY = C.GROUND; run(m, 1, () => inp({ jump: true, right: true }));
+  for (let i = 0; i < 20; i++) { m.step([inp({ right: true }), E()]); minY = Math.min(minY, m.f[0].y); }
+  check('B3：右とジャンプを同時に押すと、右に跳ぶ（x と y が両方変わる）', m.f[0].x > x0 + 40 && minY < C.GROUND - 40, `x ${x0}->${m.f[0].x}, 最高 y ${minY}`); }
+{ const m = fightReady(); place(m, 400, 900); const x0 = m.f[0].x; let minY = C.GROUND; run(m, 1, () => inp({ jump: true, left: true }));
+  for (let i = 0; i < 20; i++) { m.step([inp({ left: true }), E()]); minY = Math.min(minY, m.f[0].y); }
+  check('B3：左とジャンプを同時に押すと、左に跳ぶ（x と y が両方変わる）', m.f[0].x < x0 - 40 && minY < C.GROUND - 40, `x ${x0}->${m.f[0].x}, 最高 y ${minY}`); }
+{ const m = fightReady(); place(m, 400, 900); const x0 = m.f[0].x; run(m, 1, () => inp({ jump: true })); run(m, 20); check('B3：ジャンプだけなら横に動かない', m.f[0].x === x0); }
+{ const m = fightReady(); place(m, 400, 900); m.f[0].meter = 99; run(m, 1, () => inp({ super: true })); run(m, 1); check('B4：ゲージ 99 では必殺が出ない（無効）', m.f[0].state !== 'attack' && m.f[0].meter === 99, m.f[0].state); }
+{ const m = fightReady(); place(m, 400, 900); m.f[0].meter = 100; run(m, 1, () => inp({ super: true })); check('B4：ゲージ 100 で必殺が出る', m.f[0].state === 'attack' && m.f[0].move === 'super'); }
+{ const m = fightReady(); place(m, 400, 900); m.f[0].meter = 99; m.f[0].state = 'attack'; m.f[0].move = 'light'; m.f[0].sf = C.MOVES.light.startup + C.MOVES.light.active + C.MOVES.light.recovery - 3;
+  run(m, 1, () => inp({ super: true })); m.f[0].meter = 100; run(m, 20);
+  check('B4：ゲージ 99 で押した必殺は、後で 100 になっても出ない', m.f[0].stats.supers === 0, 'supers ' + m.f[0].stats.supers); }
 done('rules.test');

@@ -259,7 +259,7 @@
       const pJump = this.pressed(f, input, 'jump');
       f.prev = Object.assign({}, input);
       // Input buffer: an attack pressed while busy is kept for 8 frames.
-      const newest = pSuper ? 'super' : pHeavy ? 'heavy' : pLight ? 'light' : null;
+      const newest = pSuper && f.meter >= MAX_METER ? 'super' : pHeavy ? 'heavy' : pLight ? 'light' : null;
       if (newest) f.buffer = { move: newest, left: 8 };
       else if (f.buffer && --f.buffer.left <= 0) f.buffer = null;
       const free = !(f.state === 'hitstun' || f.state === 'blockstun' || f.state === 'ko' || f.state === 'attack');
