@@ -50,6 +50,7 @@ async function roundStartCase(label, toRound, setup) {
   await page.evaluate(() => { const m = window.__game.S.match; if (m.round === 1) m.f[1].hp = 0; else { m.f[0].hp = 0; m.f[1].hp = 0; } });
   if (!await until(async () => (await st()).match.phase === 'roundEnd', 5000)) { check(label + '：前ラウンドの終わりまで進む', false); return; }
   if (setup === 'tap') await page.keyboard.press('KeyJ');       // 終わりの間に攻撃を 1 回押す
+  if (setup === 'tap') { await wait(100); check('A1：終わりの間に押した攻撃は、その場で捨てられ持ち越されない（入力の保持が空）', !(await page.evaluate(() => window.__game.input())).light); }
   if (setup === 'held') await page.keyboard.down('KeyJ');        // 攻撃を押しっぱなしのまま次のラウンドへ
   await until(async () => { const s = await st(); return s.match.round === toRound && s.match.phase === 'fight'; }, 20000);
   if (setup === 'held') await page.keyboard.up('KeyJ');

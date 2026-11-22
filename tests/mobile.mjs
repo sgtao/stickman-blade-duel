@@ -129,5 +129,38 @@ for (const [label, w, h] of [['縦 390×844', 390, 844], ['横 844×390', 844, 3
   check('例外 0 件', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
+// A1（タッチ）：ラウンドの終わりに押した攻撃ボタン・押しっぱなしの攻撃ボタンを、次のラウンドの開始に持ち越さない
+{
+  console.log('[A1 タッチ 844×390]');
+  const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+  const page = await ctx.newPage();
+  await page.goto(URL_ + '?seed=4');
+  await page.tap('[data-act=start]'); await page.waitForTimeout(100); await page.tap('[data-level=weak]');
+  await page.waitForFunction(() => window.__game.state().match.phase === 'fight', null, { timeout: 5000 });
+  await page.evaluate(() => { window.__game.S.cpu.decide = () => window.Core.emptyInput(); });
+  const cdp = await ctx.newCDPSession(page);
+  const st = () => page.evaluate(() => window.__game.state());
+  const center = (k) => page.evaluate((k) => { const r = document.querySelector(`.pbtn[data-k=${k}]`).getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, k);
+  const wait = (ms) => page.waitForTimeout(ms);
+  async function until(fn, ms) { const t = Date.now(); while (Date.now() - t < ms) { if (await fn()) return true; await wait(40); } return false; }
+  async function touchCase(label, toRound, mode) {
+    await page.evaluate(() => { const m = window.__game.S.match; if (m.round === 1) m.f[1].hp = 0; else { m.f[0].hp = 0; m.f[1].hp = 0; } });
+    await until(async () => (await st()).match.phase === 'roundEnd', 5000);
+    const L = await center('light');
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...L, id: 1 }] });
+    if (mode === 'tap') { await wait(60); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); }
+    await until(async () => { const s = await st(); return s.match.round === toRound && s.match.phase === 'fight'; }, 20000);
+    if (mode === 'held') await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    const R = await center('right');
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...R, id: 2 }] });
+    const t = Date.now(); let atk = 0, n = 0;
+    while (Date.now() - t < 1000) { const s = await st(); n++; if (s.match.f[0].state === 'attack') atk++; await wait(15); }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    check(`A1 タッチ：${label}の開始 1 秒、移動の入力だけで攻撃にならない`, atk === 0, `attack ${atk}/${n}`);
+  }
+  await touchCase('2 回戦（終わりに攻撃ボタンをタップ）', 2, 'tap');
+  await touchCase('3 回戦（攻撃ボタンを押しっぱなし）', 3, 'held');
+  await ctx.close();
+}
 await browser.close();
 done('mobile');

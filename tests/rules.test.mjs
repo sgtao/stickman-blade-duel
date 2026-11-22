@@ -58,4 +58,23 @@ function finishRound(m, winner) { // winner: 0, 1, 'draw'
 { const m = fightReady(); place(m, 400, 900); m.f[0].meter = 99; m.f[0].state = 'attack'; m.f[0].move = 'light'; m.f[0].sf = C.MOVES.light.startup + C.MOVES.light.active + C.MOVES.light.recovery - 3;
   run(m, 1, () => inp({ super: true })); m.f[0].meter = 100; run(m, 20);
   check('B4：ゲージ 99 で押した必殺は、後で 100 になっても出ない', m.f[0].stats.supers === 0, 'supers ' + m.f[0].stats.supers); }
+// 審査の指摘（B3）：方向キーがジャンプと数フレームずれても斜めに跳ぶ。ただし遅すぎる方向入力は空中で効かない
+for (const n of [1, 2, 3, 5]) {
+  const m = fightReady(); place(m, 400, 900); const x0 = m.f[0].x;
+  for (let i = 0; i < 20; i++) m.step([inp({ jump: i === 0, right: i >= n }), E()]);
+  check(`B3：右を押すのがジャンプより ${n} フレーム遅れても、右に跳ぶ`, m.f[0].x > x0 + 30, `x ${x0}->${m.f[0].x}`);
+}
+{ const m = fightReady(); place(m, 400, 900); const x0 = m.f[0].x;
+  for (let i = 0; i < 20; i++) m.step([inp({ jump: i === 0, right: i >= 12 }), E()]);
+  check('B3：空中で遅れて押した方向は効かない（ジャンプの軌道を保つ）', m.f[0].x === x0, `x ${x0}->${m.f[0].x}`); }
+{ const m = fightReady(); place(m, 400, 900); const x0 = m.f[0].x;
+  for (let i = 0; i < 20; i++) m.step([inp({ jump: i === 0, right: i >= 2, left: i >= 2 }), E()]);
+  check('B3：左右を両方押すと動かない', m.f[0].x === x0); }
+// 審査の指摘（A1）：core 単体で、導入の間の押しっぱなしを開始の押下にしない
+{ const m = new C.Match({ seed: 1 }); for (let i = 0; i < C.INTRO_FRAMES; i++) m.step([inp({ light: true }), E()]);
+  let atk = 0; for (let i = 0; i < 10; i++) { m.step([inp({ light: true }), E()]); if (m.f[0].state === 'attack') atk++; }
+  check('A1：導入から押しっぱなしの攻撃は、対戦の開始で出ない（core）', atk === 0, 'attack ' + atk); }
+{ const m = new C.Match({ seed: 1 }); for (let i = 0; i < C.INTRO_FRAMES; i++) m.step([inp({ light: true }), E()]);
+  m.step([E(), E()]); m.step([inp({ light: true }), E()]);
+  check('A1：離してから押し直せば、対戦の開始でも攻撃が出る（対照）', m.f[0].state === 'attack'); }
 done('rules.test');

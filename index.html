@@ -130,7 +130,7 @@
   const WINS_NEEDED = 2, MAX_ROUNDS = 3;
   const INTRO_FRAMES = 90, ROUND_END_FRAMES = 150;
   const STAGE_LEFT = 80, STAGE_RIGHT = W - 80, MIN_GAP = 70;
-  const GRAVITY = 0.9, JUMP_V = -17, WALK_F = 5, WALK_B = 4;
+  const GRAVITY = 0.9, JUMP_V = -17, WALK_F = 5, WALK_B = 4, JUMP_STEER_FRAMES = 6;
 
   // Move table. Frames: startup, active, recovery.
   const MOVES = {
@@ -281,7 +281,11 @@
       if (pSuper && f.meter >= MAX_METER && !inAir) return this.startAttack(f, 'super');
       if (pHeavy && !inAir) return this.startAttack(f, 'heavy');
       if (pLight) return this.startAttack(f, 'light');
-      if (inAir) { this.setState(f, 'jump', true); return; }
+      if (inAir) {
+        // A direction pressed within a few frames after takeoff still steers the jump (keys are never pressed on the same frame).
+        if (f.state === 'jump' && f.sf <= JUMP_STEER_FRAMES && f.vx === 0) f.vx = ((input.right ? 1 : 0) - (input.left ? 1 : 0)) * 4.5;
+        this.setState(f, 'jump', true); return;
+      }
       if (input.guard) { f.vx = 0; this.setState(f, 'guard', true); return; }
       if (pJump) {
         f.vy = JUMP_V;
