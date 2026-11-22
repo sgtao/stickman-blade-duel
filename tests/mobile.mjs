@@ -88,6 +88,13 @@ for (const [label, w, h] of [['縦 390×844', 390, 844], ['横 844×390', 844, 3
     check('B2③ジャンプと守、守と強の縦の余白が 12 px 以上',
       rects.guard.y - bOf('jump') >= 12 - 0.01 && rects.heavy.y - bOf('guard') >= 12 - 0.01,
       `ジャンプ→守 ${(rects.guard.y - bOf('jump')).toFixed(1)}、守→強 ${(rects.heavy.y - bOf('guard')).toFixed(1)}`);
+    // 審査の指摘（余白の余裕）：縦の余白は 16 px 以上、縦持ちの ▶ と 弱 の水平の間隔は 24 px 以上
+    check('余裕③ ジャンプと守、守と強の縦の余白が 16 px 以上（3 画面）',
+      rects.guard.y - bOf('jump') >= 16 - 0.01 && rects.heavy.y - bOf('guard') >= 16 - 0.01,
+      `ジャンプ→守 ${(rects.guard.y - bOf('jump')).toFixed(1)}、守→強 ${(rects.heavy.y - bOf('guard')).toFixed(1)}`);
+    if (h > w) check('余裕④ 縦持ち：▶ と 弱 の水平の間隔が 24 px 以上',
+      rects.light.x - rOf('right') >= 24 - 0.01,
+      `▶ 右端 ${rOf('right').toFixed(1)}、弱 左端 ${rects.light.x.toFixed(1)}、間隔 ${(rects.light.x - rOf('right')).toFixed(1)}`);
   }
   // B4b 必殺ボタンの表示：0 で off（灰色・aria-disabled=true）、100 で ready（金色・aria-disabled=false）。押せなくても受ける
   if (w === 844) {
