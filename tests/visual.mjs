@@ -144,6 +144,55 @@ await page.evaluate(() => { window.__game.debug.speed = 1; });
 await until(page, async () => (await st(page)).screen === 'result', 10000);
 await page.waitForTimeout(400); await snap(page, '07_result.png');
 check('決着の画面', (await st(page)).screen === 'result');
+// M4：結果画面の注記（#resultNote）と、スコア文字・注記の比（WCAG）。背景は、文字だけを透明にして撮った画面の、文字の箱の中央値の相対輝度で測る
+{
+  const info = await page.evaluate(() => {
+    const sc = document.querySelector('#resultScore'); const nt = document.querySelector('#resultNote');
+    const rc = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; };
+    return { score: sc.textContent, note: nt ? nt.textContent : '', scoreColor: getComputedStyle(sc).color, noteColor: nt ? getComputedStyle(nt).color : '', scoreBox: rc(sc), noteBox: rc(nt) };
+  });
+  // 文字だけを透明にして、文字の箱の画素（背景）を撮る
+  await page.evaluate(() => { const s = document.createElement('style'); s.id = '__hidetext'; s.textContent = '#resultScore, #resultScore *, #resultNote { color: transparent !important; text-shadow: none !important; }'; document.head.appendChild(s); });
+  const shotOf = async (b) => b ? (await page.screenshot({ clip: { x: b[0], y: b[1], width: b[2], height: b[3] } })).toString('base64') : '';
+  const bgScore = await shotOf(info.scoreBox), bgNote = await shotOf(info.noteBox);
+  await page.evaluate(() => document.getElementById('__hidetext').remove());
+  const ratioOf = async (b64, color) => b64 ? page.evaluate(async ({ b64, color }) => {
+    const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
+    const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+    const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0);
+    const d = cx.getImageData(0, 0, cv.width, cv.height).data;
+    const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const relL = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    const rgb = (s) => s.match(/[\d.]+/g).slice(0, 3).map(Number);
+    const L = []; for (let i = 0; i < d.length; i += 4) L.push(relL(d[i], d[i + 1], d[i + 2]));
+    L.sort((a, b) => a - b); const med = L[Math.floor(L.length / 2)];
+    const ratio = (A, B) => (Math.max(A, B) + 0.05) / (Math.min(A, B) + 0.05);
+    return { r: ratio(relL(...rgb(color)), med), bgL: med };
+  }, { b64, color }) : { r: 0, bgL: 0 };
+  const rs = await ratioOf(bgScore, info.scoreColor), rn = await ratioOf(bgNote, info.noteColor);
+  check('結果：注記がある（2 本先取で決着、3 ラウンドで打ち切りは本数の多いほう）', info.note.includes('2 本先取で決着') && info.note.includes('3 ラウンド'), JSON.stringify(info.note));
+  check('結果：スコア文字と背景の比が 3 以上', rs.r >= 3, `比 ${rs.r.toFixed(2)}（背景の中央値の輝度 ${rs.bgL.toFixed(3)}、文字 ${info.scoreColor}）`);
+  check('結果：注記の文字と背景の比が 3 以上', rn.r >= 3, `比 ${rn.r.toFixed(2)}（背景の中央値の輝度 ${rn.bgL.toFixed(3)}、文字 ${info.noteColor}）`);
+  check('結果：ボタンの上端の位置（注記を足す前の HEAD は 416.6 px。下がっていない）', (await page.evaluate(() => document.querySelector('#scrResult .btn').getBoundingClientRect().top)) <= 419, 'top ' + (await page.evaluate(() => document.querySelector('#scrResult .btn').getBoundingClientRect().top)).toFixed(1));
+}
+// M1：項目 20 の手順（1 本ずつ取り、3 ラウンド目に入る）を core の規則で再現する。2 本続けて取る旧手順は、決着になる
+{
+  const r = await page.evaluate(() => {
+    const C = window.Core; const m = new C.Match({ seed: 1 });
+    const endRound = (loser) => { m.phase = 'fight'; m.f[loser].hp = 0; m.checkRoundEnd(); m.afterRound(); };
+    endRound(1); // 1 ラウンド目を自分が取る
+    const afterR1 = { round: m.round, wins: m.wins.slice(), phase: m.phase };
+    endRound(0); // 2 ラウンド目を CPU が取る
+    return { afterR1, afterR2: { round: m.round, wins: m.wins.slice(), phase: m.phase } };
+  });
+  check('手順：1 本ずつ取ると 3 ラウンド目に入る', r.afterR2.round === 3 && r.afterR2.phase === 'intro' && r.afterR2.wins.join('-') === '1-1', JSON.stringify(r));
+  const old = await page.evaluate(() => {
+    const C = window.Core; const m = new C.Match({ seed: 1 });
+    for (let i = 0; i < 2; i++) { m.phase = 'fight'; m.f[1].hp = 0; m.checkRoundEnd(); m.afterRound(); }
+    return { round: m.round, phase: m.phase, wins: m.wins.slice() };
+  });
+  check('手順（旧）：2 本続けて取ると決着になり、3 ラウンド目は無い', old.phase === 'matchEnd' && old.round === 2, JSON.stringify(old));
+}
 // 結果画面：倒れた棒人間（ko、sf 40 以上で刃を描かない）の描く点の外接矩形が canvas の内側に収まり、勝者と重ならない
 // 実際の場面: 右端は x=1200・倒れた側の向き -1、左端は x=80・向き +1（倒れた側は勝者の方を向いていた）。勝者は倒れた側から 90px 離れて立つ
 // 外接矩形は描く点だけで取る（刃の先は sf 40 以上では描かないので除く）。余白は頭 13px（半径）、刃の先 14px（光の幅）、その他の線 5px

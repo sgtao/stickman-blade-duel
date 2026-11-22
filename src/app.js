@@ -235,7 +235,20 @@
     else if (m.winner === 1) { t.textContent = 'YOU LOSE'; t.className = 'lose'; }
     else { t.textContent = 'DRAW'; t.className = 'draw'; }
     const lvName = { weak: '弱い', normal: '普通', strong: '強い' }[S.level];
-    $('#resultScore').textContent = `${m.wins[0]} - ${m.wins[1]}　（CPU：${lvName}）`;
+    // 文字は明るい色を、不透明な濃い地の上に置く（雲の上でも読めるように）。表示の規則だけを足す（決着の規則は変えない）
+    // 注記は流れの外（画面の下端）に置き、ボタンの位置を動かさない（勝者の姿と重なりを増やさないため）
+    const sc = $('#resultScore');
+    sc.style.color = '#e8ecff'; sc.style.background = '#0b0e1f'; sc.style.padding = '0 .6em'; sc.style.borderRadius = '6px';
+    sc.textContent = `${m.wins[0]} - ${m.wins[1]}　（CPU：${lvName}）`;
+    let note = document.getElementById('resultNote');
+    if (!note) {
+      note = document.createElement('p');
+      note.id = 'resultNote';
+      Object.assign(note.style, { position: 'absolute', left: '0', right: '0', bottom: '3%', margin: '0', textAlign: 'center',
+        color: '#e8ecff', background: '#0b0e1f', padding: '.2em .6em', fontSize: 'clamp(11px, 1.6cqw, 16px)' });
+      note.textContent = '2 本先取で決着（3 ラウンドで打ち切り時は本数の多いほうが勝ち）';
+      $('#scrResult').appendChild(note);
+    }
     const bs = Array.from(document.querySelectorAll('#scrResult .btn'));
     bs.forEach((b, i) => b.classList.toggle('sel', i === 0));
     show('result');
