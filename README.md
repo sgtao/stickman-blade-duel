@@ -1,4 +1,5 @@
-# Stickman Blade Duel（棒人間の剣戟対戦）
+# stickman-blade-duel
+## `Stickman Blade Duel` - 棒人間の剣戦対戦
 
 光る剣で戦う棒人間の 1 対 1 格闘ゲーム。ブラウザで CPU と対戦する。
 
@@ -28,3 +29,11 @@ node build.mjs
 export NODE_PATH=$(npm root -g)   # Playwright（グローバル）
 node tests/run_all.mjs
 ```
+
+## License
+
+MIT
+
+---
+
+🤖 Built with [Claude Code](https://claude.ai/code)
