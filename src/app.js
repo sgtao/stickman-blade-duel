@@ -385,6 +385,12 @@
       const k = ease(t / 30);
       lean = lerp(-10, -60, k); hipY = lerp(-60, -16, k); handL = [lerp(-10, -60, k), lerp(-100, -18, k)]; blade = lerp(-2.4, -3.0, k);
       footA = [lerp(-20, 30, k), 0]; footB = [lerp(14, 52, k), lerp(0, -4, k)]; headTilt = -1.2 * k;
+    } else if (f.state === 'win') {
+      // Winner: raise the blade straight up over the head and hop a little (drawing only).
+      const k = ease(Math.min(1, t / 14));
+      const hop = Math.max(0, Math.sin(t * 0.2)) * 5;
+      hipY -= hop; lean = lerp(4, 0, k); handL = [lerp(28, 12, k), lerp(-108, -150, k) - hop]; blade = lerp(-1.0, -1.57, k);
+      footA = [-20, -hop]; footB = [22, -hop];
     } else if (f.state === 'attack') {
       const m = C.MOVES[f.move];
       const s = m.startup, a = m.active;

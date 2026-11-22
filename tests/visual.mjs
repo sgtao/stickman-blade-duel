@@ -94,7 +94,7 @@ check('決着の画面', (await st(page)).screen === 'result');
   // 外接矩形どうしで比べると、勝者の刃（上へ伸びる）が矩形を広げ、足元どうしの離れた場面まで重なりに見えるため、点で比べる
   const drawn = (pts, sf) => Object.keys(pts).filter(k => k !== 'tip' || sf < 40).map(k => ({ x: pts[k][0], y: pts[k][1], m: k === 'head' ? 13 : k === 'tip' ? 14 : 5 }));
   const gap = (A, B) => Math.min(...A.flatMap(a => B.map(b => Math.hypot(a.x - b.x, a.y - b.y) - a.m - b.m)));
-  const outOfBox = [], overlaps = [], boxes = [];
+  const outOfBox = [], overlaps = [], boxes = [], winPts = [];
   // sf 20 は刃を描く間（右端で刃の先が画面外へ出ていた場面）、sf 45 は刃を描かない結果画面
   for (const [outcome, side] of [['勝ち', 1], ['負け', 0]]) for (const round of [1, 2]) for (const [edge, x] of [['右端', 1200], ['左端', 80]]) for (const sf of [20, 45]) {
     const facing = edge === '右端' ? -1 : 1;
@@ -103,10 +103,11 @@ check('決着の画面', (await st(page)).screen === 'result');
       m.round = round; m.phase = 'matchEnd'; m.winner = 1 - side;
       for (const f of m.f) { f.state = 'idle'; f.sf = 0; f.y = 600; f.vx = 0; f.vy = 0; }
       const w = m.f[1 - side], f = m.f[side];
-      w.x = x + facing * 90; w.facing = -facing;
+      w.x = x + facing * 90; w.facing = -facing; w.state = 'win'; w.sf = 30; // 勝ちの姿勢は 14 フレームで掲げ終わる。掲げ終えた後（sf 30）を描く
       f.state = 'ko'; f.sf = sf; f.x = x; f.facing = facing;
       return { stage: m.stage(), screen: g.S.screen, lose: g.pose(f), win: g.pose(w), sf: f.sf };
     }, { side, round, x, facing, sf });
+    winPts.push(r.win);
     const lr = rect(r.lose, r.sf);
     const label = `${outcome}/${r.stage}/${edge}/sf${sf}`;
     const g = gap(drawn(r.lose, r.sf), drawn(r.win, 0));
@@ -118,6 +119,10 @@ check('決着の画面', (await st(page)).screen === 'result');
     outOfBox.length ? 'NG: ' + outOfBox.join(' ; ') : boxes.length + ' 通りすべて収まる');
   check('結果画面：倒れた棒人間が勝者に食い込まない（描く点どうしの間隔 ≥ 余白の和）', overlaps.length === 0,
     overlaps.length ? 'NG: ' + overlaps.join(' ; ') : boxes.join(' ; '));
+  // 勝者の姿勢（win）：剣を頭上に真っすぐ掲げる（刃の先が頭より十分上で、腕と刃がほぼ垂直）。描く点はすべて canvas の内側
+  const raisedBad = winPts.filter(p => !(p.tip[1] < p.head[1] - 100 && Math.abs(p.tip[0] - p.hand[0]) < 20 && Object.values(p).every(([x, y]) => x >= 0 && x <= Wc && y >= 0 && y <= Hc)));
+  check('結果画面：勝者の姿勢（win）は剣を頭上に真っすぐ掲げ、描く点が canvas の内側に収まる', raisedBad.length === 0 && winPts.length === 16,
+    raisedBad.length ? `NG ${raisedBad.length}/${winPts.length}: tip ${raisedBad[0].tip.map(Math.round)} head ${raisedBad[0].head.map(Math.round)} hand ${raisedBad[0].hand.map(Math.round)}` : `${winPts.length} 通り`);
   // 補正量の連続性：倒れた姿勢で sf を 30〜45 と 1 ずつ動かしたとき、補正後の体の x（hip）の変化は毎回 6px 以内（右端・左端）
   for (const [edge, x, facing] of [['右端', 1200, -1], ['左端', 80, 1]]) {
     const xs = await page.evaluate(({ x, facing }) => {

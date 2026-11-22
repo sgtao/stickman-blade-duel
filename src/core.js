@@ -110,6 +110,7 @@
           if (f.state !== 'ko' && f.state !== 'attack' && !airborne(f)) f.vx = 0;
         }
         this.physics();
+        this.winPose();
         if (this.pf >= ROUND_END_FRAMES) this.afterRound();
         return this.events;
       }
@@ -297,6 +298,16 @@
       }
       this.phase = 'roundEnd'; this.pf = 0;
       this.events.push({ type: reason === 'ko' ? 'ko' : 'timeup', winner: w, round: this.round });
+    }
+
+    // C1: the winner shows the win pose once roundEnd has run 30 frames, the attack is over and the winner is on the ground.
+    // It then stays until the round ends. Drawing only: hit tests and input never read this state.
+    winPose() {
+      const w = this.roundWinner;
+      if (w !== 0 && w !== 1) return;
+      const f = this.f[w];
+      if (f.state === 'win') return;
+      if (f.hp > 0 && f.state !== 'ko' && f.state !== 'attack' && this.pf >= 30 && !airborne(f)) { f.state = 'win'; f.sf = 0; }
     }
 
     afterRound() {

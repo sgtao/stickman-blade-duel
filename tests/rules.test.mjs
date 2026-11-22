@@ -234,4 +234,42 @@ const dEdge = 205 - span; // 18 フレーム目の判定距離がちょうど 20
 { // 開始距離 190 で相手が止まったまま後退し続けると、距離が 205 を超えて離れる。18 フレームを過ぎても防御にならない
   const { pre, st } = backDists(startAt(190), 30);
   check('B1 距離が離れる：開始距離 190 で後退を押し続けても、30 フレームのあいだ防御にならない', st.every(s => s !== 'guard') && pre[29] > 205, `pre ${pre[0]}..${pre[29]}`); }
+// M11a（C1）勝者の喜び：勝者は roundEnd の pf 30 以降、攻撃が終わり着地していると win になり、終了まで保つ
+function roundRec(m) { // roundEnd の各フレームの状態を記録する（fight から始めて、次の導入に入るまで）
+  const rec = [];
+  for (let i = 0; i < 600 && m.phase !== 'matchEnd'; i++) {
+    m.step([E(), E()]);
+    if (m.phase === 'roundEnd') rec.push({ pf: m.pf, s: m.f.map(f => f.state), air: m.f.map(f => C.airborne(f)), sf0: m.f[0].sf });
+    else if (rec.length) break;
+  }
+  return rec;
+}
+function koBy(kind) { // kind: light / heavy / super。0 が勝つ
+  const m = fightReady();
+  if (kind === 'super') { place(m, 400, 1000); m.f[0].meter = 100; m.f[1].hp = 10; }
+  else if (kind === 'heavy') { place(m, 500, 640); m.f[1].hp = 10; }
+  else { place(m, 500, 600); m.f[1].hp = 5; }
+  run(m, 1, () => inp({ [kind]: true }));
+  return roundRec(m);
+}
+for (const kind of ['light', 'heavy', 'super']) {
+  const rec = koBy(kind); const first = rec.findIndex(r => r.s[0] === 'win');
+  const f120 = rec.find(r => r.pf === 120);
+  check(`C1：${kind} の KO で 120 フレーム目に勝者が win`, !!f120 && f120.s[0] === 'win', f120 ? `s ${f120.s.join(',')}` : 'no record');
+  check(`C1：${kind} の KO で、勝者は pf 30〜120 のあいだに win になり、終了まで保つ`,
+    first >= 0 && rec[first].pf >= 30 && rec[first].pf <= 120 && rec.slice(first).every(r => r.s[0] === 'win'), `first pf ${rec[first] && rec[first].pf}`);
+  check(`C1：${kind} の KO で、負けた側は ko のまま`, rec.length >= 120 && rec.every(r => r.s[1] === 'ko'), rec.length ? rec[rec.length - 1].s.join(',') : '');
+  // 仕様の式：win は max(30, 攻撃が終わる pf)。攻撃が終わる pf は、KO の時の sf から、技の全長までの残り
+  const mv = C.MOVES[kind], endPf = mv.startup + mv.active + mv.recovery - rec[0].sf0;
+  check(`C1：${kind} の KO で、win は max(30, 攻撃が終わる pf) = max(30, ${endPf}) フレーム目`, first >= 0 && rec[first].pf === Math.max(30, endPf), `win の pf ${rec[first] && rec[first].pf}`);
+}
+{ const m = fightReady(); place(m, 400, 500); m.timer = 2; m.f[0].hp = 50; m.f[1].hp = 50; const rec = roundRec(m);
+  check('C1：時間切れの引き分けで、誰も win にならない', rec.length >= 120 && rec.every(r => r.s[0] !== 'win' && r.s[1] !== 'win'), rec.length + ' frames'); }
+{ const m = fightReady(); place(m, 400, 500); m.f[0].hp = 0; m.f[1].hp = 0; const rec = roundRec(m);
+  check('C1：相打ちの KO（引き分け）で、誰も win にならない', m.roundResults[0].winner === 'draw' && rec.length >= 120 && rec.every(r => r.s[0] !== 'win' && r.s[1] !== 'win'), rec.length + ' frames'); }
+{ const m = fightReady(); place(m, 400, 900); run(m, 1, () => inp({ jump: true })); run(m, 3); m.f[1].hp = 0; const rec = roundRec(m);
+  const first = rec.findIndex(r => r.s[0] === 'win');
+  check('C1：空中で KO した勝者は、着地してから win になる（着地の前には win にならない）',
+    rec.some(r => r.air[0]) && first >= 0 && !rec[first].air[0] && rec[first].pf >= 30 && rec.slice(0, first).every(r => r.s[0] !== 'win'),
+    `最初の win は pf ${rec[first] && rec[first].pf}, 空中のフレーム数 ${rec.filter(r => r.air[0]).length}`); }
 done('rules.test');
