@@ -1,0 +1,14 @@
+# OS・エディタ
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Node（検査は Playwright をグローバルに入れて使うため、通常は出ない）
+node_modules/
+*.log
+
+# 検査の一時ファイル
+test-results/
+.playwright-mcp/
