@@ -12,3 +12,6 @@ node_modules/
 # 検査の一時ファイル
 test-results/
 .playwright-mcp/
+
+# テストで再生成できる画像（node tests/visual.mjs）
+shots/
