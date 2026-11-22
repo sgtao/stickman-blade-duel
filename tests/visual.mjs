@@ -43,6 +43,19 @@ const sv = await st(page);
 await snap(page, '05_super_lightning.png');
 check('必殺技が当たった瞬間に稲妻が 4 本以上', sv.bolts >= 4, 'bolts ' + sv.bolts);
 await page.waitForTimeout(1200);
+// 満タンの SUPER ゲージ：点滅（金の不透明度 0.75〜1.0、sin(now*0.012)、周期約 524 ms）の明るい時と暗い時を 1 枚ずつ
+// 撮影の直前にゲージの色を読み、明るい時と暗い時で金が変わっていることを確かめる（点滅が止まった場合に落ちる）
+async function fullGaugeShot(name, sign) {
+  await page.evaluate(() => { const g = window.__game; g.S.auto = null; g.S.cpu.decide = () => window.Core.emptyInput(); g.S.match.f[0].meter = 100; });
+  await page.waitForFunction((s) => Math.sin(performance.now() * 0.012) * s > 0.9, sign, { polling: 16, timeout: 3000 });
+  const px = await page.evaluate(() => { const c = window.__game.S; const cv = document.querySelector('#game'); const d = cv.getContext('2d').getImageData(200, 679, 1, 1).data; return { r: d[0], g: d[1], b: d[2], full: c.match.f[0].meter >= 100 }; });
+  await snap(page, name);
+  return px;
+}
+const gBright = await fullGaugeShot('13_super_full_bright.png', 1);
+const gDark = await fullGaugeShot('13b_super_full_dark.png', -1);
+check('満タンの SUPER ゲージは明るい時と暗い時で金の色が変わる（点滅が働く）', gBright.full && gDark.full && Math.abs(gBright.g - gDark.g) >= 40,
+  `明るい時 RGB(${gBright.r},${gBright.g},${gBright.b}) 暗い時 RGB(${gDark.r},${gDark.g},${gDark.b})`);
 // 決着の一撃：スローと揺れと火花
 await page.evaluate(() => { const g = window.__game, m = g.S.match; m.f[0].x = 560; m.f[1].x = 670; m.f[1].hp = 4; for (const f of m.f) { f.state = 'idle'; f.sf = 0; f.y = 600; } });
 await page.waitForTimeout(60);

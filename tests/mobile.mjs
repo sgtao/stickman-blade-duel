@@ -21,6 +21,7 @@ for (const [label, w, h] of [['縦 390×844', 390, 844], ['横 844×390', 844, 3
   // (a) 高さ：自分のゲージを 60% にして青い塗りの行数を数え、画面上の高さ（CSS px）が 6 以上
   // (b) 空のとき：ゲージの枠の内側の輝度と、その外側の背景の輝度の差が GAUGE_MIN_CONTRAST 以上
   // (c) 盤面の内側：ゲージの下端（枠を含む）が論理 716 以内、ラベルの上端が 0 以上
+  // しきい値 40：修正前は差 5.1〜10.3、修正後の最小は 43.7（横 844×390）。修正前との差が十分あることを確かめる
   const GAUGE_MIN_CONTRAST = 40;
   await page.waitForTimeout(1200);
   await page.evaluate(() => { window.__game.S.match.f[0].meter = 60; });
