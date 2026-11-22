@@ -163,8 +163,8 @@ for (const k of [3, 6]) {
   check('D2：空中で必殺を押しても出ない（ゲージは 100 のまま）', st.state !== 'attack' && m.f[0].meter === 100 && m.f[0].stats.supers === 0, `state ${st.state}, meter ${m.f[0].meter}`); }
 { const m = fightReady(); place(m, 500, 600); const { evs } = airAttack(m, 4, 'heavy', 60, true);
   check('D2：ガードの相手に空中の強が当たると、削りの 2 だけ', m.f[1].hp === 98 && evs.some(e => e.type === 'block'), 'hp ' + m.f[1].hp); }
-{ const m = fightReady(); place(m, 500, 600); airAttack(m, 4, 'light', 60, true);
-  check('D2：ガードの相手に空中の弱が当たると、削りは 0', m.f[1].hp === 100, 'hp ' + m.f[1].hp); }
+{ const m = fightReady(); place(m, 500, 600); const { evs } = airAttack(m, 4, 'light', 60, true);
+  check('D2：ガードの相手に空中の弱が当たると、削りは 0', m.f[1].hp === 100 && evs.some(e => e.type === 'block'), 'hp ' + m.f[1].hp + ', block ' + evs.some(e => e.type === 'block')); }
 { // 着地の瞬間に攻撃中（強は 52 フレーム続く）。着地の後も状態が壊れず、攻撃が終わると操作できる
   const m = fightReady(); place(m, 400, 900); run(m, 1, () => inp({ jump: true })); run(m, 29); run(m, 1, () => inp({ heavy: true }));
   let landed = false, landedAttack = false;
