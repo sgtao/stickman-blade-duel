@@ -3,6 +3,8 @@
 
 光る剣で戦う棒人間の 1 対 1 格闘ゲーム。ブラウザで CPU と対戦する。
 
+[遊ぶ](https://sgtao.github.io/stickman-blade-duel/)
+
 ## 遊び方
 `index.html` をブラウザで開く（サーバー不要）。
 
