@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060d">
+<title>Stickman Blade Duel — 棒人間の剣戟対戦</title>
+<style>
+  :root { --cyan: #5ee7ff; --red: #ff4d5e; --ink: #e8ecff; --dim: #8b93b8; --bg: #05060d; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden;
+    font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", "Segoe UI", sans-serif;
+    -webkit-user-select: none; user-select: none; touch-action: none; overscroll-behavior: none; }
+  #topbar { position: absolute; display: flex; align-items: center; gap: 8px; padding: 0 10px; z-index: 5; }
+  #topbar .name { font-weight: 800; letter-spacing: .08em; font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  #topbar .name b { color: var(--cyan); }
+  #topbar .keys { font-size: 12px; color: var(--dim); white-space: nowrap; }
+  .tbtn { min-width: 44px; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #2b3260; background: #10142c; color: var(--ink); font-size: 13px; font-weight: 700; cursor: pointer; }
+  .tbtn:focus-visible, .btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+  #game { position: absolute; display: block; background: #000; image-rendering: auto; }
+  #ui { position: absolute; pointer-events: none; z-index: 4; }
+  .screen { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 2.2%; pointer-events: auto;
+    background: radial-gradient(ellipse at center, rgba(8,10,30,.55), rgba(3,4,12,.88)); text-align: center; padding: 3%; }
+  .screen.on { display: flex; }
+  .screen h1 { margin: 0; font-size: clamp(22px, 6.2cqw, 76px); line-height: 1.05; letter-spacing: .06em; font-weight: 900;
+    color: #fff; text-shadow: 0 0 10px var(--cyan), 0 0 28px rgba(94,231,255,.7), 0 0 60px rgba(255,77,94,.35); }
+  .screen h1 span { color: var(--red); text-shadow: 0 0 10px var(--red), 0 0 30px rgba(255,77,94,.7); }
+  .screen h2 { margin: 0; font-size: clamp(18px, 4cqw, 48px); font-weight: 900; letter-spacing: .05em; }
+  .screen p { margin: 0; color: var(--dim); font-size: clamp(11px, 1.6cqw, 18px); }
+  .row { display: flex; gap: 2.2cqw; flex-wrap: wrap; justify-content: center; }
+  .btn { min-width: 44px; min-height: 44px; padding: .55em 1.4em; font-size: clamp(14px, 2.1cqw, 24px); font-weight: 800; letter-spacing: .05em;
+    color: #fff; background: linear-gradient(#1b2150, #0e1230); border: 2px solid #3a4590; border-radius: 12px; cursor: pointer;
+    box-shadow: 0 0 0 rgba(94,231,255,0); transition: transform .08s, box-shadow .15s, border-color .15s; }
+  .btn:hover, .btn.sel { border-color: var(--cyan); box-shadow: 0 0 18px rgba(94,231,255,.55); transform: translateY(-1px); }
+  .btn small { display: block; font-size: .55em; color: var(--dim); font-weight: 600; letter-spacing: 0; margin-top: .2em; }
+  .btn.lv-weak.sel, .btn.lv-weak:hover { border-color: #7dffa8; box-shadow: 0 0 18px rgba(125,255,168,.5); }
+  .btn.lv-strong.sel, .btn.lv-strong:hover { border-color: var(--red); box-shadow: 0 0 18px rgba(255,77,94,.6); }
+  #ui { container-type: inline-size; }
+  .win { color: var(--cyan); text-shadow: 0 0 18px rgba(94,231,255,.8); }
+  .lose { color: var(--red); text-shadow: 0 0 18px rgba(255,77,94,.8); }
+  .draw { color: #ffd45e; text-shadow: 0 0 18px rgba(255,212,94,.7); }
+  #pad { position: absolute; inset: 0; pointer-events: none; z-index: 6; display: none; }
+  body.touch.fighting #pad { display: block; }
+  body.touch .kbd { display: none; }
+  body:not(.touch) .tch { display: none; }
+  .help { font-size: clamp(11px, 1.5cqw, 16px) !important; line-height: 1.6; max-width: 92%; }
+  .help b { color: var(--ink); }
+  .pbtn { position: absolute; pointer-events: auto; touch-action: none; border-radius: 50%; border: 2px solid rgba(140,160,255,.45);
+    background: radial-gradient(circle at 50% 40%, rgba(40,50,110,.95), rgba(14,18,44,.95)); color: #fff; font-weight: 900;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 18px; line-height: 1.1; text-align: center; }
+  .pbtn.on { border-color: var(--cyan); box-shadow: 0 0 16px rgba(94,231,255,.8); background: radial-gradient(circle, rgba(60,90,170,.95), rgba(20,30,70,.95)); }
+  .pbtn.atk { border-color: rgba(255,120,130,.55); }
+  .pbtn.sup { border-color: rgba(255,212,94,.7); }
+  .pbtn.sup.ready { box-shadow: 0 0 18px rgba(255,212,94,.9); }
+  .pbtn small { display: block; font-size: 10px; opacity: .75; font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="topbar">
+  <div class="name"><b>STICKMAN</b> BLADE DUEL</div>
+  <div class="keys" id="keys">移動 A/D・ジャンプ W・ガード S・弱 J・強 K・必殺 L・一時停止 P・消音 M</div>
+  <button class="tbtn" id="btnPause" aria-label="一時停止">II</button>
+  <button class="tbtn" id="btnMute" aria-label="消音">音 ON</button>
+</div>
+<canvas id="game" width="1280" height="720"></canvas>
+<div id="ui">
+  <section class="screen on" id="scrTitle">
+    <h1>STICKMAN<br><span>BLADE</span> DUEL</h1>
+    <p>光る剣の棒人間で、CPU と 1 対 1。2 本先取で勝ち。</p>
+    <div class="row"><button class="btn sel" data-act="start">スタート<small class="kbd">Enter</small></button></div>
+    <p class="help kbd"><b>A/D</b> 移動　<b>W</b> ジャンプ　<b>S</b> 押し続けてガード　<b>J</b> 弱　<b>K</b> 強　<b>L</b> 必殺（ゲージ満タン）　<b>P</b> 一時停止　<b>M</b> 消音</p>
+    <p class="help tch"><b>◀▶</b> 移動　<b>▲</b> ジャンプ　<b>守</b> 押し続けてガード　<b>弱・強</b> 攻撃　<b>必殺</b> ゲージ満タンで稲妻（跳んでかわせる）</p>
+  </section>
+  <section class="screen" id="scrSelect">
+    <h2>CPU の強さ</h2>
+    <div class="row">
+      <button class="btn lv-weak" data-level="weak">弱い<small class="kbd">1</small></button>
+      <button class="btn lv-normal sel" data-level="normal">普通<small class="kbd">2</small></button>
+      <button class="btn lv-strong" data-level="strong">強い<small class="kbd">3</small></button>
+    </div>
+    <p class="kbd">←→ で選んで Enter</p>
+    <p class="tch">縦持ちより横持ちのほうが、試合の画面が大きくなります</p>
+  </section>
+  <section class="screen" id="scrPause">
+    <h2>一時停止</h2>
+    <div class="row">
+      <button class="btn sel" data-act="resume">再開</button>
+      <button class="btn" data-act="title">タイトルへ</button>
+    </div>
+  </section>
+  <section class="screen" id="scrResult">
+    <h2 id="resultText">YOU WIN</h2>
+    <p id="resultScore">2 - 0</p>
+    <div class="row">
+      <button class="btn sel" data-act="again">もう一度<small class="kbd">Enter</small></button>
+      <button class="btn" data-act="select">強さを選び直す</button>
+    </div>
+  </section>
+</div>
+<div id="pad">
+  <button class="pbtn" data-k="left" aria-label="左">◀</button>
+  <button class="pbtn" data-k="right" aria-label="右">▶</button>
+  <button class="pbtn" data-k="jump" aria-label="ジャンプ">▲<small>JUMP</small></button>
+  <button class="pbtn" data-k="guard" aria-label="ガード">守<small>GUARD</small></button>
+  <button class="pbtn atk" data-k="light" aria-label="弱攻撃">弱<small>LIGHT</small></button>
+  <button class="pbtn atk" data-k="heavy" aria-label="強攻撃">強<small>HEAVY</small></button>
+  <button class="pbtn sup" data-k="super" aria-label="必殺技">必殺<small>SUPER</small></button>
+</div>
+<script id="core">
+/*CORE*/
+</script>
+<script id="app">
+/*APP*/
+</script>
+</body>
+</html>
