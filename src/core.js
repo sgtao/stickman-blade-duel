@@ -64,7 +64,8 @@
       this.startRound();
     }
 
-    stage() { return this.round % 2 === 1 ? 'space' : 'volcano'; }
+    // ラウンド 1＝宇宙、2＝火山、3＝昼（背景の順）
+    stage() { return ['space', 'volcano', 'day'][Math.min(this.round, 3) - 1]; }
 
     startRound() {
       this.round += 1;

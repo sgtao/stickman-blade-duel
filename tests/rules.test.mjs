@@ -44,7 +44,8 @@ function finishRound(m, winner) { // winner: 0, 1, 'draw'
   check('3 ラウンド後は本数の多いほうの勝ち（1-0）', m.phase === 'matchEnd' && m.winner === 1); }
 { const m = fightReady(); m.paused = true; const fr = m.frame, x = m.f[0].x; run(m, 30, () => inp({ right: true }));
   check('一時停止：止めている間は進まない', m.frame === fr && m.f[0].x === x); m.paused = false; run(m, 5, () => inp({ right: true })); check('一時停止：解除で再開', m.frame === fr + 5); }
-{ const m = fightReady(); check('背景：1 ラウンド目は宇宙の街', m.stage() === 'space'); finishRound(m, 0); while (m.phase !== 'intro') m.step([E(), E()]); check('背景：2 ラウンド目は火山', m.stage() === 'volcano'); }
+{ const m = fightReady(); check('背景：1 ラウンド目は宇宙の街', m.stage() === 'space'); finishRound(m, 0); while (m.phase !== 'intro') m.step([E(), E()]); check('背景：2 ラウンド目は火山', m.stage() === 'volcano');
+  finishRound(m, 'draw'); while (m.phase !== 'intro') m.step([E(), E()]); check('背景：3 ラウンド目は昼', m.round === 3 && m.stage() === 'day'); }
 // M10（B3・B4）：斜めジャンプと必殺のゲージ条件
 { const m = fightReady(); place(m, 400, 900); const x0 = m.f[0].x; let minY = C.GROUND; run(m, 1, () => inp({ jump: true, right: true }));
   for (let i = 0; i < 20; i++) { m.step([inp({ right: true }), E()]); minY = Math.min(minY, m.f[0].y); }

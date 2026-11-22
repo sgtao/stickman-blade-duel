@@ -17,9 +17,15 @@ const snap = (p, name) => p.screenshot({ path: path.join(shots, name) });
 const page = await open({ viewport: { width: 1280, height: 764 } });
 // 背景の平均色
 const means = await page.evaluate(() => {
-  const r = {}; for (const k of ['space', 'volcano']) { const c = window.__game.BG[k]; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let R = 0, B = 0; for (let i = 0; i < d.length; i += 4) { R += d[i]; B += d[i + 2]; } r[k] = { R: R / (d.length / 4), B: B / (d.length / 4) }; } return r; });
+  const r = {}; for (const k of ['space', 'volcano', 'day']) { const c = window.__game.BG[k]; if (!c) { r[k] = null; continue; } const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let R = 0, B = 0, Y = 0; for (let i = 0; i < d.length; i += 4) { R += d[i]; B += d[i + 2]; Y += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; } const n = d.length / 4; r[k] = { R: R / n, B: B / n, Y: Y / n }; } return r; });
 check('宇宙の街：平均色は青 > 赤', means.space.B > means.space.R, JSON.stringify(means.space));
 check('火山：平均色は赤 > 青', means.volcano.R > means.volcano.B, JSON.stringify(means.volcano));
+// C2：昼の背景（平均輝度 0.2126R+0.7152G+0.0722B の画素平均）
+check('昼：背景がある', !!means.day, JSON.stringify(means.day));
+check('昼：平均色は青 > 赤', !!means.day && means.day.B > means.day.R, JSON.stringify(means.day));
+check('昼：平均輝度が 110 以上', !!means.day && means.day.Y >= 110, means.day ? 'Y ' + means.day.Y.toFixed(1) : '');
+check('昼：宇宙・火山のどちらより 50 以上明るい', !!means.day && means.day.Y >= Math.max(means.space.Y, means.volcano.Y) + 50,
+  means.day ? `昼 ${means.day.Y.toFixed(1)} / 宇宙 ${means.space.Y.toFixed(1)} / 火山 ${means.volcano.Y.toFixed(1)}` : '');
 await page.waitForTimeout(300); await snap(page, '01_title.png');
 await page.keyboard.press('Enter'); await page.waitForTimeout(250); await snap(page, '02_select.png');
 await page.keyboard.press('Enter');
@@ -32,6 +38,11 @@ await page.evaluate(() => { const g = window.__game; g.S.match.startRound(); });
 await until(page, async () => (await st(page)).match.phase === 'fight');
 await page.waitForTimeout(1500); await snap(page, '04_fight_volcano.png');
 check('2 ラウンド目の背景は火山', (await st(page)).stage === 'volcano');
+// 昼（3 ラウンド目）
+await page.evaluate(() => { const g = window.__game; g.S.match.startRound(); });
+await until(page, async () => (await st(page)).match.phase === 'fight');
+await page.waitForTimeout(1500); await snap(page, '04b_fight_day.png');
+check('3 ラウンド目の背景は昼', (await st(page)).stage === 'day');
 // 必殺技の稲妻
 await page.evaluate(() => { const g = window.__game, m = g.S.match; g.S.auto = null; g.S.cpu.decide = () => window.Core.emptyInput();
   m.f[0].x = 360; m.f[1].x = 900; m.f[0].meter = 100; for (const f of m.f) { f.state = 'idle'; f.sf = 0; f.y = 600; f.vx = 0; f.vy = 0; } });
