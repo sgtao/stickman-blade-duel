@@ -39,11 +39,13 @@ for (const [label, w, h, touch] of SIZES) {
       const ui = document.querySelector('#ui').getBoundingClientRect();
       const sc = document.getElementById(id);
       const eps = 0.5, bad = [], small = [], wrapped = [], tiny = [];
+      let maxBottom = 0; // 内容の下端（縦持ちで下半分が空きすぎていないかを見る）
       for (const el of sc.querySelectorAll('*')) {
         const cs = getComputedStyle(el);
         if (cs.display === 'none' || cs.visibility === 'hidden') continue;
         const b = el.getBoundingClientRect();
         if (b.width === 0 && b.height === 0) continue;
+        maxBottom = Math.max(maxBottom, b.bottom);
         if (b.left < ui.left - eps || b.top < ui.top - eps || b.right > ui.right + eps || b.bottom > ui.bottom + eps) {
           bad.push(el.tagName.toLowerCase() + ' “' + (el.textContent || '').trim().slice(0, 10) + '” ' +
             [Math.round(b.top - ui.top), Math.round(b.bottom - ui.top), Math.round(ui.height)].join('/'));
@@ -56,10 +58,15 @@ for (const [label, w, h, touch] of SIZES) {
         }
         if (el.matches('.help, p, .btn') && parseFloat(cs.fontSize) < 10) tiny.push(el.tagName.toLowerCase() + ' ' + cs.fontSize);
       }
-      return { over: sc.scrollHeight - sc.clientHeight, uiW: Math.round(ui.width), uiH: Math.round(ui.height), bad: bad.slice(0, 4), small, wrapped, tiny };
+      return { over: sc.scrollHeight - sc.clientHeight, uiW: Math.round(ui.width), uiH: Math.round(ui.height), bad: bad.slice(0, 4), small, wrapped, tiny,
+        fill: +(maxBottom / window.innerHeight).toFixed(3) };
     }, id);
     check(`${id}: 高さが枠に収まる`, r.over <= 0 && r.bad.length === 0,
       `枠 ${r.uiW}×${r.uiH}、はみ出し ${r.over}px ${r.bad.join(' | ')}`);
+    // 縦持ちのスマホでは、タイトル・強さ選択・結果の内容の下端が画面高の 60% 以上（下半分が空きすぎない）
+    if (touch && h >= w && ['scrTitle', 'scrSelect', 'scrResult'].includes(id)) {
+      check(`${id}: 縦で内容の下端が画面高の 60% 以上`, r.fill >= 0.6, `下端 ${Math.round(r.fill * 100)}%`);
+    }
     check(`${id}: ボタンは 44×44 px 以上`, r.small.length === 0, r.small.join(','));
     check(`${id}: 操作説明の組は途中で改行しない`, r.wrapped.length === 0, r.wrapped.join(' / '));
     check(`${id}: 文字は 10 px 以上`, r.tiny.length === 0, r.tiny.join(' / '));

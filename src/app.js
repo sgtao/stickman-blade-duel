@@ -762,6 +762,7 @@
     const top = $('#topbar'), ui = $('#ui');
     const pads = {}; document.querySelectorAll('.pbtn').forEach(b => { pads[b.dataset.k] = b; });
     let cx, cy, cw, ch;
+    let uiBox = null; // 縦持ちのとき、試合以外の画面の枠（topbar の下から画面の下端まで）
     $('#keys').style.display = touchMode || vw < 900 ? 'none' : '';
     if (!touchMode) {
       const tb = 44;
@@ -772,6 +773,7 @@
       const tb = 48;
       cw = vw; ch = cw * 9 / 16; cx = 0; cy = tb;
       place(top, 0, 0, vw, tb);
+      uiBox = [0, tb, vw, vh - tb];
       const areaY = cy + ch + 8, areaH = vh - areaY - 8;
       const s = Math.max(52, Math.min(84, areaH / 3.3, vw / 5.2));
       const by = areaY + Math.max(0, (areaH - s * 2.6) / 2);
@@ -810,7 +812,8 @@
     if (!(touchMode && vh < vw)) top.querySelector('.name').style.display = '';
     place(canvas, cx, cy, cw, ch);
     hudK = Math.max(1, Math.min(2.1, 760 / cw));
-    place(ui, cx, cy, cw, ch);
+    // 縦持ちでは、タイトル・強さ選択・一時停止・結果の内容を画面の縦の中央に寄せるため、枠を画面の下まで広げる
+    if (uiBox) place(ui, ...uiBox); else place(ui, cx, cy, cw, ch);
   }
   window.addEventListener('resize', layout);
   window.addEventListener('orientationchange', () => setTimeout(layout, 120));
