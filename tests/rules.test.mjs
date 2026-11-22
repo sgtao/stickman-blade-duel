@@ -216,4 +216,22 @@ for (const kind of ['hitstun', 'blockstun']) {
   for (let i = 0; i < 60; i++) { run(m, 1, backIn); st.push(m.f[0].state); air.push(C.airborne(m.f[0])); }
   const j = air.indexOf(false); const after = st.slice(j, j + 17);
   check('B1：空中では数えない（着地の後、17 フレームでは防御にならない）', air.some(Boolean) && j > 0 && after.every(s => s !== 'guard'), 'landed at ' + j + ' ' + after.join(',')); }
+// B1 の距離の境界と数え直し（reviewer M1）。判定は 1 フレームごとの距離で行う。後退で 1 フレームに離れる量は実測する
+const startAt = (d0) => { const m = fightReady(); place(m, 400, 400 + d0); return m; };
+const backDists = (m, n, a = backIn, b = E) => { const pre = [], st = []; for (let i = 0; i < n; i++) { pre.push(Math.abs(m.f[1].x - m.f[0].x)); run(m, 1, a, b); st.push(m.f[0].state); } return { pre, st }; };
+const span = (() => { const { pre } = backDists(startAt(100), 18); return pre[17] - pre[0]; })(); // 17 フレームの後退で離れた距離（実測）
+const dEdge = 205 - span; // 18 フレーム目の判定距離がちょうど 205 になる開始距離
+{ const { pre, st } = backDists(startAt(dEdge), 18);
+  check('B1 境界：18 フレーム目の判定距離がちょうど 205 なら、18 フレーム目に防御になる', pre[17] === 205 && st[17] === 'guard' && st.slice(0, 17).every(s => s !== 'guard'), `pre ${pre[0]}..${pre[17]}, state ${st[17]}`); }
+{ const { pre, st } = backDists(startAt(dEdge + 1), 18);
+  check('B1 境界：18 フレーム目の判定距離が 206 なら、18 フレームのあいだ防御にならない', pre[17] === 206 && st.every(s => s !== 'guard'), `pre ${pre[0]}..${pre[17]}`); }
+{ // 範囲内で 5 フレーム後退 → 相手を 206 px（範囲外）へ 1 フレーム → 相手を 100 px へ戻す。戻った後の 18 フレーム目までは防御にならない
+  const m = startAt(150); backDists(m, 5);
+  m.f[1].x = m.f[0].x + 206; const out = backDists(m, 1);
+  m.f[1].x = m.f[0].x + 100; const { pre, st } = backDists(m, 18);
+  check('B1 数え直し：範囲外（206 px）の 1 フレームで、後退の数えが止まる', out.pre[0] === 206 && out.st[0] !== 'guard', `pre ${out.pre[0]}, state ${out.st[0]}`);
+  check('B1 数え直し：戻った後は 18 フレーム目まで防御にならず、18 フレーム目に防御になる（前の 5 フレームを足さない）', st.slice(0, 17).every(s => s !== 'guard') && st[17] === 'guard', `pre ${pre[0]}..${pre[17]}, ${st.join(',')}`); }
+{ // 開始距離 190 で相手が止まったまま後退し続けると、距離が 205 を超えて離れる。18 フレームを過ぎても防御にならない
+  const { pre, st } = backDists(startAt(190), 30);
+  check('B1 距離が離れる：開始距離 190 で後退を押し続けても、30 フレームのあいだ防御にならない', st.every(s => s !== 'guard') && pre[29] > 205, `pre ${pre[0]}..${pre[29]}`); }
 done('rules.test');
