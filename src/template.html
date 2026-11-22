@@ -55,8 +55,8 @@
   .pbtn.sup { border-color: rgba(255,212,94,.7); }
   .pbtn.sup.ready { box-shadow: 0 0 18px rgba(255,212,94,.9); }
   .pbtn small { display: block; font-size: 10px; opacity: .75; font-weight: 700; }
-  /* 盤面の枠が低いとき（高さ 170 px 以下）だけ、高さに合わせて縮める。それより高い枠の見た目は変えない */
-  @container (max-height: 170px) {
+  /* 盤面の枠が低いとき（高さ 180 px 以下）だけ、高さに合わせて縮める。それより高い枠の見た目は変えない */
+  @container (max-height: 180px) {
     .screen { gap: 1.6cqh; padding: 2cqh 3cqw; }
     .screen h1 { font-size: clamp(16px, min(6.2cqw, 10.5cqh), 76px); line-height: 1; }
     .screen h2 { font-size: clamp(14px, min(4cqw, 6.7cqh), 48px); }
