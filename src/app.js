@@ -563,6 +563,16 @@
     x.fillStyle = sg; x.fillRect(980, 210, 240, 240);
     // 雲は HUD の文字（y 0〜90）の上に出さない
     for (let i = 0; i < 9; i++) { const cx = r() * W, cy = 150 + r() * 180, cw = 90 + r() * 120; x.fillStyle = 'rgba(255,255,255,0.75)'; x.beginPath(); x.ellipse(cx, cy, cw, cw * 0.3, 0, 0, Math.PI * 2); x.fill(); }
+    // HUD の文字の後ろの暗い板（昼だけ）。雲より後に描き、雲が文字の下に来ないようにする。
+    // 板は drawHUD と同じ座標・フォント（hudK = 1）の文字の箱に 3 px の余白を足したもの。平均輝度を下げすぎないよう、上端の帯にはしない
+    const hudInk = (font, text, align, px, py) => { x.font = font; x.textAlign = align; x.textBaseline = 'top'; const m = x.measureText(text);
+      const l = align === 'right' ? px - m.width : align === 'center' ? px - m.width / 2 : px;
+      return [l, py - m.actualBoundingBoxAscent, l + m.width, py + m.actualBoundingBoxDescent]; };
+    const f20 = '800 20px system-ui, sans-serif';
+    const plates = [hudInk(f20, 'YOU', 'left', 50, 70), hudInk(f20, 'CPU（弱い）', 'right', 1230, 70), hudInk(f20, 'CPU（強い）', 'right', 1230, 70),
+      hudInk('700 13px system-ui, sans-serif', 'ROUND 3', 'center', 640, 90)];
+    x.fillStyle = 'rgba(10,18,44,0.55)';
+    for (const b of plates) x.fillRect(b[0] - 3, b[1] - 3, b[2] - b[0] + 6, b[3] - b[1] + 6);
     // 暗い尾根（棒人間の帯を覆う）
     x.fillStyle = '#28304f'; x.beginPath(); x.moveTo(0, GROUND);
     for (let bx = 0; bx <= W; bx += 40) x.lineTo(bx, 380 - 25 * Math.abs(Math.sin(bx * 0.006)));
@@ -605,16 +615,22 @@
     }
     // body
     const ko = f.state === 'ko';
-    ctx.strokeStyle = f.state === 'hitstun' && (f.sf % 4 < 2) ? '#ffffff' : col.body;
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = 7;
-    ctx.beginPath();
-    ctx.moveTo(p.hip[0], p.hip[1]); ctx.lineTo(p.kneeA[0], p.kneeA[1]); ctx.lineTo(p.footA[0], p.footA[1]);
-    ctx.moveTo(p.hip[0], p.hip[1]); ctx.lineTo(p.kneeB[0], p.kneeB[1]); ctx.lineTo(p.footB[0], p.footB[1]);
-    ctx.moveTo(p.hip[0], p.hip[1]); ctx.lineTo(p.neck[0], p.neck[1]);
-    ctx.moveTo(p.shoulder[0], p.shoulder[1]); ctx.lineTo(p.elbow2[0], p.elbow2[1]); ctx.lineTo(p.hand2[0], p.hand2[1]);
-    ctx.moveTo(p.shoulder[0], p.shoulder[1]); ctx.lineTo(p.elbow[0], p.elbow[1]); ctx.lineTo(p.hand[0], p.hand[1]);
-    ctx.stroke();
-    ctx.fillStyle = ctx.strokeStyle; ctx.beginPath(); ctx.arc(p.head[0], p.head[1], 13, 0, Math.PI * 2); ctx.fill();
+    // 昼だけ：白い体や赤い体が淡い空・雲に溶けるので、暗い縁取りを先に描く（縁取りは体と頭の外側 2 px）
+    const day = !!S.match && S.match.stage() === 'day';
+    const bodyCol = f.state === 'hitstun' && (f.sf % 4 < 2) ? '#ffffff' : col.body;
+    const bodyPath = () => {
+      ctx.beginPath();
+      ctx.moveTo(p.hip[0], p.hip[1]); ctx.lineTo(p.kneeA[0], p.kneeA[1]); ctx.lineTo(p.footA[0], p.footA[1]);
+      ctx.moveTo(p.hip[0], p.hip[1]); ctx.lineTo(p.kneeB[0], p.kneeB[1]); ctx.lineTo(p.footB[0], p.footB[1]);
+      ctx.moveTo(p.hip[0], p.hip[1]); ctx.lineTo(p.neck[0], p.neck[1]);
+      ctx.moveTo(p.shoulder[0], p.shoulder[1]); ctx.lineTo(p.elbow2[0], p.elbow2[1]); ctx.lineTo(p.hand2[0], p.hand2[1]);
+      ctx.moveTo(p.shoulder[0], p.shoulder[1]); ctx.lineTo(p.elbow[0], p.elbow[1]); ctx.lineTo(p.hand[0], p.hand[1]);
+    };
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (day) { ctx.strokeStyle = 'rgba(8,14,36,0.9)'; ctx.lineWidth = 11; bodyPath(); ctx.stroke(); }
+    ctx.strokeStyle = bodyCol; ctx.lineWidth = 7; bodyPath(); ctx.stroke();
+    if (day) { ctx.fillStyle = 'rgba(8,14,36,0.9)'; ctx.beginPath(); ctx.arc(p.head[0], p.head[1], 15.5, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = bodyCol; ctx.beginPath(); ctx.arc(p.head[0], p.head[1], 13, 0, Math.PI * 2); ctx.fill();
     // visor / eye glow
     ctx.fillStyle = `rgba(${col.blade},0.95)`; ctx.beginPath(); ctx.arc(p.head[0] + 5 * f.facing, p.head[1] - 1, 3, 0, Math.PI * 2); ctx.fill();
     if (i === 1) { // CPU scarf

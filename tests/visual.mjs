@@ -46,26 +46,58 @@ await page.waitForTimeout(1500); await snap(page, '04b_fight_day.png');
 check('3 ラウンド目の背景は昼', (await st(page)).stage === 'day');
 // C2 見やすさ：背景だけの canvas（棒人間・HUD なし）。棒人間が立つ帯（x は 420±80 と 860±80、y は 400〜600）の画素の中央値の相対輝度（WCAG）と、
 // 体の色（P1 は #f2f6ff、P2 は src/app.js の COLORS[1].body の #ff5a64）、体力ゲージの文字（YOU・CPU）とタイマーの文字（白）との比
+// 文字の箱は drawHUD（src/app.js）と同じ座標・フォントから measureText で求める（決め打ちしない）
 const contrast = await page.evaluate(() => {
   const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
   const relL = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-  const hexL = (h) => relL(...[1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)));
+  const hexRGB = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const hexL = (h) => relL(...hexRGB(h));
   const median = (a) => { const s = a.slice().sort((p, q) => p - q), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
-  const cvs = window.__game.BG.day; const d = cvs.getContext('2d').getImageData(0, 0, cvs.width, cvs.height).data;
-  const px = (x, y) => { const i = (y * cvs.width + x) * 4; return relL(d[i], d[i + 1], d[i + 2]); };
-  const region = (x0, x1, y0, y1) => { const a = []; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) a.push(px(x, y)); return a; };
   const ratio = (A, B) => (Math.max(A, B) + 0.05) / (Math.min(A, B) + 0.05);
-  const band = median([...region(340, 501, 400, 601), ...region(780, 941, 400, 601)]);
-  const med = (x0, x1, y0, y1) => median(region(x0, x1, y0, y1));
-  return { band,
+  const cvs = window.__game.BG.day; const d = cvs.getContext('2d').getImageData(0, 0, cvs.width, cvs.height).data;
+  const at = (x, y) => { const i = (y * cvs.width + x) * 4; return [d[i], d[i + 1], d[i + 2]]; };
+  const pix = (x0, x1, y0, y1) => { const a = []; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) a.push(at(x, y)); return a; };
+  const medRGB = (a) => [0, 1, 2].map(c => median(a.map(p => p[c])));
+  const medL = (a) => median(a.map(p => relL(...p)));
+  const mix = (fg, al, bg) => fg.map((v, j) => al * v + (1 - al) * bg[j]);
+  // 文字の箱。drawHUD と同じ：textBaseline は 'top'、x は textAlign、フォントは hudK（k）倍。k は drawHUD の式（canvas の幅から）
+  const k = Math.max(1, Math.min(2.1, 760 / document.querySelector('#game').getBoundingClientRect().width));
+  const cx = document.createElement('canvas').getContext('2d'); cx.textBaseline = 'top';
+  const ink = (font, text, align, x, y) => { cx.font = font; cx.textAlign = align; const m = cx.measureText(text);
+    const l = align === 'right' ? x - m.width : align === 'center' ? x - m.width / 2 : x;
+    return [l, y - m.actualBoundingBoxAscent, l + m.width, y + m.actualBoundingBoxDescent]; };
+  const union = (bs) => [Math.min(...bs.map(b => b[0])), Math.min(...bs.map(b => b[1])), Math.max(...bs.map(b => b[2])), Math.max(...bs.map(b => b[3]))];
+  const area = (b) => pix(Math.max(0, Math.floor(b[0])), Math.min(cvs.width, Math.ceil(b[2])), Math.max(0, Math.floor(b[1])), Math.min(cvs.height, Math.ceil(b[3])));
+  const f20 = `800 ${Math.round(20 * k)}px system-ui, sans-serif`;
+  const B = {
+    you: ink(f20, 'YOU', 'left', 50, 70),
+    cpu: union(['弱い', '普通', '強い'].map(lv => ink(f20, 'CPU（' + lv + '）', 'right', 1230, 70))),
+    timer: ink('900 44px system-ui, sans-serif', '88', 'center', 640, 28),
+    round: ink(`700 ${Math.round(13 * k)}px system-ui, sans-serif`, 'ROUND 3', 'center', 640, 90),
+    gauge: [47, 31, 553, 63], // 体力ゲージの地（drawHUD の bar(50,34,500,26) と bar(730,34,500,26) の外枠 3 px の外側）
+  };
+  const bgL = (b) => medL(area(b)), bgRGB = (b) => medRGB(area(b));
+  const band = medL([...pix(340, 501, 400, 601), ...pix(780, 941, 400, 601)]);
+  // ROUND は rgba(220,225,255,0.8) で描く。地の色と alpha で重ねた色で比べる
+  const roundEff = mix([220, 225, 255], 0.8, bgRGB(B.round));
+  // 体力ゲージは地の上の backplate rgba(5,6,16,0.8) の上に、塗り（全 6 色）を描く
+  const gBack = mix([5, 6, 16], 0.8, bgRGB(B.gauge));
+  const fills = ['#9af0ff', '#2fa8d8', '#ff9aa2', '#d02f45', '#ffd36b', '#e0702a'];
+  const boxes = Object.fromEntries(Object.entries(B).map(([n, b]) => [n, b.map(v => Math.round(v))]));
+  return { k, boxes, band,
     p1: ratio(hexL('#f2f6ff'), band), p2: ratio(hexL('#ff5a64'), band),
-    you: ratio(hexL('#e8f6ff'), med(48, 101, 56, 75)), cpu: ratio(hexL('#ffd0d4'), med(1100, 1233, 56, 75)),
-    timer: ratio(hexL('#ffffff'), med(596, 685, 4, 53)) };
+    you: ratio(hexL('#e8f6ff'), bgL(B.you)), cpu: ratio(hexL('#ffd0d4'), bgL(B.cpu)),
+    timer: Math.min(ratio(hexL('#ffffff'), bgL(B.timer)), ratio(hexL('#ffd45e'), bgL(B.timer))),
+    round: ratio(relL(...roundEff), bgL(B.round)),
+    gauge: Math.min(...fills.map(c => ratio(hexL(c), relL(...gBack)))) };
 });
+console.log('  文字の箱（論理 px）k=' + contrast.k.toFixed(2) + ' ' + JSON.stringify(contrast.boxes));
 check(`昼：棒人間が立つ帯の中央値（相対輝度 ${contrast.band.toFixed(3)}）と P1 の体の色（#f2f6ff）の比が 3 以上`, contrast.p1 >= 3, ' 比 ' + contrast.p1.toFixed(2));
 check('昼：同じ帯と P2 の体の色（#ff5a64）の比が 3 以上', contrast.p2 >= 3, '比 ' + contrast.p2.toFixed(2));
 check('昼：体力ゲージの文字（YOU・CPU）と背景の比が 3 以上', contrast.you >= 3 && contrast.cpu >= 3, `YOU ${contrast.you.toFixed(2)} / CPU ${contrast.cpu.toFixed(2)}`);
-check('昼：タイマーの文字と背景の比が 3 以上', contrast.timer >= 3, '比 ' + contrast.timer.toFixed(2));
+check('昼：タイマーの文字（白・残り 10 秒以下の黄）と背景の比が 3 以上', contrast.timer >= 3, '最小比 ' + contrast.timer.toFixed(2));
+check('昼：ROUND の文字（alpha 0.8）と背景の比が 3 以上', contrast.round >= 3, '比 ' + contrast.round.toFixed(2));
+check('昼：体力ゲージの塗り（全 6 色）と、その地の比が 3 以上', contrast.gauge >= 3, '最小比 ' + contrast.gauge.toFixed(2));
 { const url = await page.evaluate(() => window.__game.BG.day.toDataURL('image/png')); fs.writeFileSync(path.join(shots, 'day_bg_only.png'), Buffer.from(url.split(',')[1], 'base64')); }
 // 必殺技の稲妻
 await page.evaluate(() => { const g = window.__game, m = g.S.match; g.S.auto = null; g.S.cpu.decide = () => window.Core.emptyInput();
@@ -183,5 +215,47 @@ for (const [name, w, h] of [['08_mobile_portrait.png', 390, 844], ['09_mobile_la
   await p.waitForTimeout(900); await snap(p, name);
 }
 check('コンソールのエラーと例外が 0 件', errors.length === 0, errors.slice(0, 3).join(' | '));
+// C1 勝者の喜び：勝者が剣を掲げた画像。名前は win_<勝った側>_round<ラウンド>.png（left＝P1 の自分、right＝CPU）。
+// ラウンドを作って（HP を 0 にして KO）、勝者が win になり sf 40 に達したら debug.speed を 0 にして止め、その画面を撮る
+async function winShot(name, round, side) {
+  const p = await open({ viewport: { width: 1280, height: 764 } });
+  await p.keyboard.press('Enter'); await p.waitForTimeout(250); await p.keyboard.press('Enter');
+  await until(p, async () => (await st(p)).match.phase === 'fight');
+  await p.evaluate(({ round, side }) => {
+    const g = window.__game, m = g.S.match;
+    g.S.auto = null; g.S.cpu.decide = () => window.Core.emptyInput();
+    m.round = round; m.wins = round === 1 ? [0, 0] : round === 2 ? [1, 0] : [1, 1];
+    for (const f of m.f) { f.state = 'idle'; f.sf = 0; f.y = 600; f.vx = 0; f.vy = 0; f.hp = 100; }
+    m.f[1 - side].hp = 0;
+  }, { round, side });
+  const won = await until(p, async () => p.evaluate((s) => { const f = window.__game.S.match.f[s]; return f.state === 'win' && f.sf >= 40; }, side), 8000);
+  await p.evaluate(() => { window.__game.debug.speed = 0; });
+  const info = await p.evaluate((s) => { const g = window.__game, m = g.S.match; return { stage: m.stage(), state: m.f[s].state, sf: m.f[s].sf }; }, side);
+  await p.screenshot({ path: path.join(shots, name) });
+  check(`勝者の画像 ${name}：勝者（${side === 0 ? '左' : '右'}）が win で掲げている、背景は ${info.stage}`,
+    won && info.state === 'win' && info.stage === ['space', 'volcano', 'day'][round - 1], JSON.stringify(info));
+  await p.context().close();
+}
+await winShot('win_left_round1.png', 1, 0);
+await winShot('win_right_round2.png', 2, 1);
+await winShot('win_left_round3.png', 3, 0);
+await winShot('win_right_round3.png', 3, 1);
+// 昼の空に跳んだ棒人間（左 P1 と右 CPU）。空に溶けないかを目視する。速度 0 で止めて撮る
+{
+  const p = await open({ viewport: { width: 1280, height: 764 } });
+  await p.keyboard.press('Enter'); await p.waitForTimeout(250); await p.keyboard.press('Enter');
+  await until(p, async () => (await st(p)).match.phase === 'fight');
+  await p.evaluate(() => {
+    const g = window.__game, m = g.S.match;
+    g.S.auto = null; g.S.cpu.decide = () => window.Core.emptyInput();
+    m.round = 3; m.wins = [0, 0];
+    m.f[0].state = 'jump'; m.f[0].y = 600 - 200; m.f[0].vy = 0; m.f[0].sf = 0; m.f[0].x = 420;
+    m.f[1].state = 'jump'; m.f[1].y = 600 - 200; m.f[1].vy = 0; m.f[1].sf = 0; m.f[1].x = 860;
+    g.debug.speed = 0;
+  });
+  await p.waitForTimeout(200);
+  await p.screenshot({ path: path.join(shots, 'jump_day_round3.png') });
+  await p.context().close();
+}
 await browser.close();
 done('visual');
