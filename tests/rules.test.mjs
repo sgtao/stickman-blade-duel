@@ -99,6 +99,39 @@ check('D1：定数 HIT_DY = 140、SUPER_CLEAR = 100 が Core から読める', C
   check('D1：必殺の稲妻：相手の高さ 95 で当たる', m.f[1].hp === 72, 'hp ' + m.f[1].hp); }
 { const m = fightReady(); place(m, 400, 1000); m.f[0].meter = 100; holdAt(m, 105, 70, (i) => inp({ super: i === 0 }));
   check('D1：必殺の稲妻：相手の高さ 105 で外れる', m.f[1].hp === 100, 'hp ' + m.f[1].hp); }
+// M1（境界）：判定の直前（resolveHits に入る時点）の実測値で、境界の ±1 を確かめる。
+// physics() が先に走るため、設定した高さより 0.9 px 低く判定される（上の holdAt の注意）。その分を見込んで設定値を決める。
+function measureHits(m) {
+  const log = [];
+  const orig = m.resolveHits.bind(m);
+  m.resolveHits = () => {
+    const a = m.f[0], o = m.f[1];
+    const mv = a.state === 'attack' ? C.MOVES[a.move] : null;
+    if (mv && a.sf >= mv.startup && a.sf < mv.startup + mv.active) log.push({ dy: Math.abs(o.y - a.y), oy: o.y });
+    orig();
+  };
+  return log;
+}
+// 攻撃側を空中の高さ h に固定する（相手は地面）。空中の攻撃側の判定（M2）に使う
+function holdAttackerAt(m, h, n, atk) {
+  const evs = [];
+  for (let i = 0; i < n; i++) { const a = m.f[0]; a.y = C.GROUND - h; a.vy = 0; evs.push(...m.step([atk(i), E()])); }
+  return evs;
+}
+const near = (v, x) => Math.abs(v - x) < 1e-6;
+{ const m = fightReady(); place(m, 500, 600); const log = measureHits(m); holdAt(m, 140.9, 30, (i) => inp({ light: i === 0 }));
+  check('M1：通常技（弱）：判定時の差がちょうど 140 で当たる', log.length > 0 && log.every(e => near(e.dy, 140)) && m.f[1].hp === 94, `実測 ${log.map(e => e.dy).join(',')}, hp ${m.f[1].hp}`); }
+{ const m = fightReady(); place(m, 500, 600); const log = measureHits(m); holdAt(m, 141.9, 30, (i) => inp({ light: i === 0 }));
+  check('M1：通常技（弱）：判定時の差が 141 で外れる', log.length > 0 && log.every(e => near(e.dy, 141)) && m.f[1].hp === 100, `実測 ${log.map(e => e.dy).join(',')}, hp ${m.f[1].hp}`); }
+{ const m = fightReady(); place(m, 400, 1000); m.f[0].meter = 100; const log = measureHits(m); holdAt(m, 100.9, 70, (i) => inp({ super: i === 0 }));
+  check('M1：稲妻：判定時の高さがちょうど 100 で当たる', log.length > 0 && log.every(e => near(e.oy, C.GROUND - 100)) && m.f[1].hp === 72, `実測 y ${log.map(e => e.oy).join(',')}, hp ${m.f[1].hp}`); }
+{ const m = fightReady(); place(m, 400, 1000); m.f[0].meter = 100; const log = measureHits(m); holdAt(m, 101.9, 70, (i) => inp({ super: i === 0 }));
+  check('M1：稲妻：判定時の高さが 101 で外れる', log.length > 0 && log.every(e => near(e.oy, C.GROUND - 101)) && m.f[1].hp === 100, `実測 y ${log.map(e => e.oy).join(',')}, hp ${m.f[1].hp}`); }
+// M2：攻撃側が空中のときも、式 Math.abs(o.y - f.y) で差を測る（相手は地面に立つ）
+{ const m = fightReady(); place(m, 500, 600); const log = measureHits(m); holdAttackerAt(m, 135.9, 30, (i) => inp({ light: i === 0 }));
+  check('M2：攻撃側が空中で、判定時の差 135 で当たる', log.length > 0 && log.every(e => near(e.dy, 135)) && m.f[1].hp === 94, `実測 ${log.map(e => e.dy).join(',')}, hp ${m.f[1].hp}`); }
+{ const m = fightReady(); place(m, 500, 600); const log = measureHits(m); holdAttackerAt(m, 145.9, 30, (i) => inp({ light: i === 0 }));
+  check('M2：攻撃側が空中で、判定時の差 145 で外れる', log.length > 0 && log.every(e => near(e.dy, 145)) && m.f[1].hp === 100, `実測 ${log.map(e => e.dy).join(',')}, hp ${m.f[1].hp}`); }
 for (const k of [8, 10]) { // 既存の「押す時刻 14」と同じ数え方：必殺入力の後、k フレーム待ってからジャンプを押す
   const m = fightReady(); place(m, 400, 900); m.f[0].meter = 100;
   run(m, 1, () => inp({ super: true })); run(m, k); run(m, 1, null, () => inp({ jump: true })); run(m, 60);
