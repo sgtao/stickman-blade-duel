@@ -995,6 +995,7 @@
   // ---------- Backgrounds ----------
   function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
   const BG = {};
+  const MOON = { x: 1010, y: 240, r: 20 }; // 宇宙の街の月（論理座標）。HUD と重ならない位置にする
   function buildSpace() {
     const c = mk(W, H), x = c.getContext('2d'), r = C.mulberry32(11);
     let gr = x.createLinearGradient(0, 0, 0, GROUND);
@@ -1019,8 +1020,8 @@
     x.strokeStyle = 'rgba(120,110,200,0.5)'; x.lineWidth = 4; x.beginPath(); x.ellipse(0, 0, pr * 2.15, pr * 0.5, 0, 0, Math.PI); x.stroke();
     x.restore();
     // moon
-    const mg = x.createRadialGradient(1010, 120, 2, 1010, 120, 22); mg.addColorStop(0, '#f4f2ff'); mg.addColorStop(1, '#8a86b0');
-    x.fillStyle = mg; x.beginPath(); x.arc(1010, 120, 20, 0, Math.PI * 2); x.fill();
+    const mg = x.createRadialGradient(MOON.x, MOON.y, 2, MOON.x, MOON.y, 22); mg.addColorStop(0, '#f4f2ff'); mg.addColorStop(1, '#8a86b0');
+    x.fillStyle = mg; x.beginPath(); x.arc(MOON.x, MOON.y, MOON.r, 0, Math.PI * 2); x.fill();
     // city layers
     const layer = (base, hmin, hmax, col, win, wcol) => {
       let bx = -20;
@@ -1394,7 +1395,7 @@
 
   // ---------- Test hooks ----------
   window.__game = {
-    S, BG, debug, perf, Sfx, pressLog,
+    S, BG, MOON, debug, perf, Sfx, pressLog,
     state() {
       const m = S.match;
       return { screen: S.screen, level: S.level, timeScale: S.timeScale, shake: S.shake, parts: S.parts.length, bolts: S.bolts.length,

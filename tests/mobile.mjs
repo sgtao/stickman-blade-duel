@@ -32,6 +32,33 @@ for (const [label, w, h] of [['縦 390×844', 390, 844], ['横 844×390', 844, 3
   const onTop = KEYS.filter(k => overlap(rects[k], rects.pause) || overlap(rects[k], rects.mute));
   check('一時停止・消音ボタンとも重ならない', onTop.length === 0 && inView(rects.pause) && inView(rects.mute), onTop.join(','));
   check('試合の画面が画面内に収まり、幅 360 px 以上', inView(rects.canvas) && rects.canvas.w >= 360, JSON.stringify(rects.canvas));
+  // 宇宙の街（1 ラウンド目）の月が、HUD（CPU 名・体力ゲージ・タイマー・ラウンド表示）と右の柱に重ならない
+  const moon = await page.evaluate(() => {
+    const cw = document.querySelector('#game').getBoundingClientRect().width;
+    const k = Math.max(1, Math.min(2.1, 760 / cw)); // app.js の hudK と同じ式（論理座標の文字の大きさ）
+    const mc = document.createElement('canvas').getContext('2d');
+    mc.font = `800 ${Math.round(20 * k)}px system-ui, sans-serif`; mc.textBaseline = 'top';
+    let x0 = Infinity, y1 = 0;
+    for (const lv of ['弱い', '普通', '強い']) { // 3 つの難易度の文字の最大範囲
+      const mm = mc.measureText('CPU（' + lv + '）');
+      x0 = Math.min(x0, 1230 - mm.width); y1 = Math.max(y1, 70 + mm.actualBoundingBoxDescent);
+    }
+    const boxes = {
+      'CPU名': { x0, x1: 1230, y0: 70, y1 },
+      '体力ゲージ(右)': { x0: 727, x1: 1233, y0: 31, y1: 63 },
+      'タイマー': { x0: 598, x1: 682, y0: 20, y1: 84 },
+      'ラウンド表示・丸印': { x0: 500, x1: 780, y0: 20, y1: 110 },
+      '右の柱': { x0: 1108, x1: 1152, y0: 0, y1: 600 },
+    };
+    const st = window.__game.state(); const m = window.__game.MOON;
+    const hits = Object.entries(boxes).filter(([, b]) => {
+      const dx = Math.max(b.x0 - m.x, 0, m.x - b.x1), dy = Math.max(b.y0 - m.y, 0, m.y - b.y1);
+      return dx * dx + dy * dy < (m.r + 2) * (m.r + 2); // 月の光る縁（半径 22）まで含めて判定
+    }).map(([n]) => n);
+    return { stage: st.stage, moon: m, k, hits };
+  });
+  check('宇宙の街（1 ラウンド目）で試合している', moon.stage === 'space', String(moon.stage));
+  check('月が HUD と右の柱に重ならない', moon.hits.length === 0, `月 (${moon.moon.x},${moon.moon.y}) k=${moon.k.toFixed(2)} 重なり: ${moon.hits.join(',') || 'なし'}`);
   // タップで操作が入る
   const bad = [];
   for (const k of KEYS) {
