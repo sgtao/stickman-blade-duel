@@ -17,6 +17,39 @@ for (const [label, w, h] of [['縦 390×844', 390, 844], ['横 844×390', 844, 3
   await page.tap('[data-act=start]'); await page.waitForTimeout(100); await page.tap('[data-level=weak]');
   await page.waitForFunction(() => window.__game.state().match.phase === 'fight', null, { timeout: 5000 });
   await page.evaluate(() => { window.__game.S.cpu.decide = () => window.Core.emptyInput(); });
+  // SUPER ゲージ：スマホで細く暗く、空のとき背景に溶けて見えない問題（合格条件 SUPER-GAUGE）
+  // (a) 高さ：自分のゲージを 60% にして青い塗りの行数を数え、画面上の高さ（CSS px）が 6 以上
+  // (b) 空のとき：ゲージの枠の内側の輝度と、その外側の背景の輝度の差が GAUGE_MIN_CONTRAST 以上
+  // (c) 盤面の内側：ゲージの下端（枠を含む）が論理 716 以内、ラベルの上端が 0 以上
+  const GAUGE_MIN_CONTRAST = 40;
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => { window.__game.S.match.f[0].meter = 60; });
+  await page.waitForTimeout(150);
+  const gh = await page.evaluate(() => {
+    const cv = document.querySelector('#game'), g = cv.getContext('2d');
+    const LW = cv.width, LH = cv.height, sc = cv.getBoundingClientRect().width / LW;
+    const d = g.getImageData(0, 0, LW, LH).data; let n = 0, top = -1, bot = -1;
+    for (let y = 640; y < LH; y++) { const i = (y * LW + 60) * 4; if (Math.abs(d[i] - 58) < 25 && Math.abs(d[i + 1] - 166) < 25 && Math.abs(d[i + 2] - 208) < 25) { n++; if (top < 0) top = y; bot = y; } }
+    return { rows: n, cssH: n * sc, top, bot, LH };
+  });
+  // 空に戻して輝度を測る
+  await page.evaluate(() => { window.__game.S.match.f[0].meter = 0; });
+  await page.waitForTimeout(200);
+  const con = await page.evaluate(() => {
+    const cv = document.querySelector('#game'), g = cv.getContext('2d');
+    const LW = cv.width, LH = cv.height, cw = cv.getBoundingClientRect().width, k = Math.max(1, Math.min(2.1, 760 / cw));
+    const d = g.getImageData(0, 0, LW, LH).data;
+    const lum = (x0, x1, y0, y1) => { let s = 0, n = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = (y * LW + x) * 4; s += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; n++; } return s / n; };
+    const gh = 12 * k, top = 676 - 2, bot = 676 + gh + 2; // 枠（ゲージの外側 2 px）
+    const inside = lum(180, 330, 676, Math.floor(676 + gh));
+    const above = lum(180, 330, Math.floor(top - 8), top - 1), below = lum(180, 330, Math.ceil(bot + 1), Math.min(LH, Math.ceil(bot + 8)));
+    const outside = (above + below) / 2;
+    return { k, inside, outside, above, below, contrast: Math.abs(inside - outside), labelTop: 676 - 6 - 14 * k, gaugeBottom: bot };
+  });
+  check('SUPER ゲージの高さが 6 CSS px 以上', gh.cssH >= 6, `${gh.rows} 行 × ${gh.cssH.toFixed(2)} CSS px`);
+  check('空のゲージが背景と区別できる（輝度差 ' + GAUGE_MIN_CONTRAST + ' 以上）', con.contrast >= GAUGE_MIN_CONTRAST, `差 ${con.contrast.toFixed(1)}（枠内 ${con.inside.toFixed(1)}、外側 ${con.outside.toFixed(1)}、k=${con.k.toFixed(2)}）`);
+  check('SUPER ゲージとラベルが盤面の内側', con.gaugeBottom <= 716 && con.labelTop >= 0, `下端 ${con.gaugeBottom.toFixed(1)}、ラベル上端 ${con.labelTop.toFixed(1)}`);
+  console.log('    gauge detail:', JSON.stringify({ gh, con }));
   const rects = await page.evaluate(() => {
     const r = (el) => { const b = el.getBoundingClientRect(); const cs = getComputedStyle(el); return { x: b.x, y: b.y, w: b.width, h: b.height, vis: cs.display !== 'none' && cs.visibility !== 'hidden' }; };
     const o = { canvas: r(document.querySelector('#game')), pause: r(document.querySelector('#btnPause')), mute: r(document.querySelector('#btnMute')) };

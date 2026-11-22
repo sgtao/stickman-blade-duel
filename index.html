@@ -1259,11 +1259,14 @@
     // super meters
     for (let i = 0; i < 2; i++) {
       const f = m.f[i], full = f.meter >= C.MAX_METER;
-      const x = i === 0 ? 50 : 930, y = 676, w = 300;
-      ctx.fillStyle = 'rgba(5,6,16,0.75)'; ctx.fillRect(x - 2, y - 2, w + 4, 16);
+      // 高さは盤面の大きさに合わせて k 倍（スマホで盤面が縮んでも見えるように）。下端は論理 703 以内なので y は動かさない
+      const x = i === 0 ? 50 : 930, y = 676, w = 300, gh = 12 * k;
+      // 空の部分：背景より明るい塗りと、薄い枠線で輪郭を出す
+      ctx.fillStyle = 'rgba(70,82,130,0.7)'; ctx.fillRect(x - 2, y - 2, w + 4, gh + 4);
+      ctx.strokeStyle = 'rgba(200,210,255,0.55)'; ctx.lineWidth = 1; ctx.strokeRect(x - 1.5, y - 1.5, w + 3, gh + 3);
       const pulse = full ? 0.75 + 0.25 * Math.sin(now * 0.012) : 1;
       ctx.fillStyle = full ? `rgba(255,212,94,${pulse})` : (i === 0 ? '#3aa6d0' : '#c23a4e');
-      if (i === 0) ctx.fillRect(x, y, w * f.meter / 100, 12); else ctx.fillRect(x + w - w * f.meter / 100, y, w * f.meter / 100, 12);
+      if (i === 0) ctx.fillRect(x, y, w * f.meter / 100, gh); else ctx.fillRect(x + w - w * f.meter / 100, y, w * f.meter / 100, gh);
       ctx.font = `800 ${Math.round(14 * k)}px system-ui, sans-serif`; ctx.textAlign = i === 0 ? 'left' : 'right'; ctx.fillStyle = full ? '#ffd45e' : 'rgba(220,225,255,0.7)';
       ctx.fillText(full ? 'SUPER READY' : 'SUPER', i === 0 ? x : x + w, y - 6 - 14 * k);
     }
