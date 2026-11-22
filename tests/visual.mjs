@@ -1,6 +1,7 @@
 // 合格条件 8：演出の発生、背景 2 種の色、8 枚の画像を shots/ に出す
 import { playwright, URL_, ROOT, check, done } from './lib.mjs';
 import path from 'path';
+import fs from 'fs';
 const { chromium } = playwright();
 const shots = path.join(ROOT, 'shots');
 const browser = await chromium.launch();
@@ -43,6 +44,29 @@ await page.evaluate(() => { const g = window.__game; g.S.match.startRound(); });
 await until(page, async () => (await st(page)).match.phase === 'fight');
 await page.waitForTimeout(1500); await snap(page, '04b_fight_day.png');
 check('3 ラウンド目の背景は昼', (await st(page)).stage === 'day');
+// C2 見やすさ：背景だけの canvas（棒人間・HUD なし）。棒人間が立つ帯（x は 420±80 と 860±80、y は 400〜600）の画素の中央値の相対輝度（WCAG）と、
+// 体の色（P1 は #f2f6ff、P2 は src/app.js の COLORS[1].body の #ff5a64）、体力ゲージの文字（YOU・CPU）とタイマーの文字（白）との比
+const contrast = await page.evaluate(() => {
+  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const relL = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  const hexL = (h) => relL(...[1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)));
+  const median = (a) => { const s = a.slice().sort((p, q) => p - q), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+  const cvs = window.__game.BG.day; const d = cvs.getContext('2d').getImageData(0, 0, cvs.width, cvs.height).data;
+  const px = (x, y) => { const i = (y * cvs.width + x) * 4; return relL(d[i], d[i + 1], d[i + 2]); };
+  const region = (x0, x1, y0, y1) => { const a = []; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) a.push(px(x, y)); return a; };
+  const ratio = (A, B) => (Math.max(A, B) + 0.05) / (Math.min(A, B) + 0.05);
+  const band = median([...region(340, 501, 400, 601), ...region(780, 941, 400, 601)]);
+  const med = (x0, x1, y0, y1) => median(region(x0, x1, y0, y1));
+  return { band,
+    p1: ratio(hexL('#f2f6ff'), band), p2: ratio(hexL('#ff5a64'), band),
+    you: ratio(hexL('#e8f6ff'), med(48, 101, 56, 75)), cpu: ratio(hexL('#ffd0d4'), med(1100, 1233, 56, 75)),
+    timer: ratio(hexL('#ffffff'), med(596, 685, 4, 53)) };
+});
+check(`昼：棒人間が立つ帯の中央値（相対輝度 ${contrast.band.toFixed(3)}）と P1 の体の色（#f2f6ff）の比が 3 以上`, contrast.p1 >= 3, ' 比 ' + contrast.p1.toFixed(2));
+check('昼：同じ帯と P2 の体の色（#ff5a64）の比が 3 以上', contrast.p2 >= 3, '比 ' + contrast.p2.toFixed(2));
+check('昼：体力ゲージの文字（YOU・CPU）と背景の比が 3 以上', contrast.you >= 3 && contrast.cpu >= 3, `YOU ${contrast.you.toFixed(2)} / CPU ${contrast.cpu.toFixed(2)}`);
+check('昼：タイマーの文字と背景の比が 3 以上', contrast.timer >= 3, '比 ' + contrast.timer.toFixed(2));
+{ const url = await page.evaluate(() => window.__game.BG.day.toDataURL('image/png')); fs.writeFileSync(path.join(shots, 'day_bg_only.png'), Buffer.from(url.split(',')[1], 'base64')); }
 // 必殺技の稲妻
 await page.evaluate(() => { const g = window.__game, m = g.S.match; g.S.auto = null; g.S.cpu.decide = () => window.Core.emptyInput();
   m.f[0].x = 360; m.f[1].x = 900; m.f[0].meter = 100; for (const f of m.f) { f.state = 'idle'; f.sf = 0; f.y = 600; f.vx = 0; f.vy = 0; } });
@@ -107,7 +131,7 @@ check('決着の画面', (await st(page)).screen === 'result');
   const gap = (A, B) => Math.min(...A.flatMap(a => B.map(b => Math.hypot(a.x - b.x, a.y - b.y) - a.m - b.m)));
   const outOfBox = [], overlaps = [], boxes = [], winPts = [];
   // sf 20 は刃を描く間（右端で刃の先が画面外へ出ていた場面）、sf 45 は刃を描かない結果画面
-  for (const [outcome, side] of [['勝ち', 1], ['負け', 0]]) for (const round of [1, 2]) for (const [edge, x] of [['右端', 1200], ['左端', 80]]) for (const sf of [20, 45]) {
+  for (const [outcome, side] of [['勝ち', 1], ['負け', 0]]) for (const round of [1, 2, 3]) for (const [edge, x] of [['右端', 1200], ['左端', 80]]) for (const sf of [20, 45]) {
     const facing = edge === '右端' ? -1 : 1;
     const r = await page.evaluate(({ side, round, x, facing, sf }) => {
       const g = window.__game, m = g.S.match;
@@ -126,13 +150,13 @@ check('決着の画面', (await st(page)).screen === 'result');
     if (lr[0] < 0 || lr[1] < 0 || lr[2] > Wc || lr[3] > Hc || r.screen !== 'result') outOfBox.push(label + ' [' + lr.join(',') + '] screen=' + r.screen);
     if (g < 0) overlaps.push(label + ' 食い込み ' + g.toFixed(1) + 'px');
   }
-  check('結果画面：倒れた棒人間の外接矩形が canvas の内側に収まる（勝ち・負け × 背景 2 種 × 左右の端 × sf 20・45）', outOfBox.length === 0,
+  check('結果画面：倒れた棒人間の外接矩形が canvas の内側に収まる（勝ち・負け × 背景 3 種 × 左右の端 × sf 20・45）', outOfBox.length === 0,
     outOfBox.length ? 'NG: ' + outOfBox.join(' ; ') : boxes.length + ' 通りすべて収まる');
   check('結果画面：倒れた棒人間が勝者に食い込まない（描く点どうしの間隔 ≥ 余白の和）', overlaps.length === 0,
     overlaps.length ? 'NG: ' + overlaps.join(' ; ') : boxes.join(' ; '));
   // 勝者の姿勢（win）：剣を頭上に真っすぐ掲げる（刃の先が頭より十分上で、腕と刃がほぼ垂直）。描く点はすべて canvas の内側
   const raisedBad = winPts.filter(p => !(p.tip[1] < p.head[1] - 100 && Math.abs(p.tip[0] - p.hand[0]) < 20 && Object.values(p).every(([x, y]) => x >= 0 && x <= Wc && y >= 0 && y <= Hc)));
-  check('結果画面：勝者の姿勢（win）は剣を頭上に真っすぐ掲げ、描く点が canvas の内側に収まる', raisedBad.length === 0 && winPts.length === 16,
+  check('結果画面：勝者の姿勢（win）は剣を頭上に真っすぐ掲げ、描く点が canvas の内側に収まる', raisedBad.length === 0 && winPts.length === 24,
     raisedBad.length ? `NG ${raisedBad.length}/${winPts.length}: tip ${raisedBad[0].tip.map(Math.round)} head ${raisedBad[0].head.map(Math.round)} hand ${raisedBad[0].hand.map(Math.round)}` : `${winPts.length} 通り`);
   // 補正量の連続性：倒れた姿勢で sf を 30〜45 と 1 ずつ動かしたとき、補正後の体の x（hip）の変化は毎回 6px 以内（右端・左端）
   for (const [edge, x, facing] of [['右端', 1200, -1], ['左端', 80, 1]]) {

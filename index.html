@@ -1175,18 +1175,21 @@
   }
 
   function buildDay() {
-    // 昼（M11b-1）：明るい空。M11b-2 で棒人間の立つ帯を暗くして読めるようにする
+    // 昼：明るい空。棒人間が立つ帯（y 400〜600）は、暗い尾根と地面で暗くする（白い体・赤い体・HUD の文字が読めるように）
     const c = mk(W, H), x = c.getContext('2d'), r = C.mulberry32(37);
-    const sky = x.createLinearGradient(0, 0, 0, GROUND);
-    sky.addColorStop(0, '#4ba3f0'); sky.addColorStop(1, '#d6f0ff');
+    const sky = x.createLinearGradient(0, 0, 0, 400);
+    sky.addColorStop(0, '#2a62a8'); sky.addColorStop(0.65, '#7fc2f5'); sky.addColorStop(1, '#d6f0ff');
     x.fillStyle = sky; x.fillRect(0, 0, W, H);
-    const sg = x.createRadialGradient(1080, 120, 4, 1080, 120, 110); sg.addColorStop(0, '#fff8d6'); sg.addColorStop(1, 'rgba(255,248,214,0)');
-    x.fillStyle = sg; x.fillRect(960, 0, 240, 240);
-    for (let i = 0; i < 9; i++) { const cx = r() * W, cy = 60 + r() * 200, cw = 90 + r() * 120; x.fillStyle = 'rgba(255,255,255,0.75)'; x.beginPath(); x.ellipse(cx, cy, cw, cw * 0.3, 0, 0, Math.PI * 2); x.fill(); }
-    x.fillStyle = '#9fd0f2'; x.beginPath(); x.moveTo(0, GROUND);
-    for (let bx = 0; bx <= W; bx += 40) x.lineTo(bx, GROUND - 90 - 60 * Math.abs(Math.sin(bx * 0.006)));
+    // 太陽は右の中ほど（体力ゲージの文字の上には出さない）
+    const sg = x.createRadialGradient(1100, 330, 4, 1100, 330, 120); sg.addColorStop(0, '#fff8d6'); sg.addColorStop(1, 'rgba(255,248,214,0)');
+    x.fillStyle = sg; x.fillRect(980, 210, 240, 240);
+    // 雲は HUD の文字（y 0〜90）の上に出さない
+    for (let i = 0; i < 9; i++) { const cx = r() * W, cy = 150 + r() * 180, cw = 90 + r() * 120; x.fillStyle = 'rgba(255,255,255,0.75)'; x.beginPath(); x.ellipse(cx, cy, cw, cw * 0.3, 0, 0, Math.PI * 2); x.fill(); }
+    // 暗い尾根（棒人間の帯を覆う）
+    x.fillStyle = '#28304f'; x.beginPath(); x.moveTo(0, GROUND);
+    for (let bx = 0; bx <= W; bx += 40) x.lineTo(bx, 380 - 25 * Math.abs(Math.sin(bx * 0.006)));
     x.lineTo(W, GROUND); x.closePath(); x.fill();
-    const fg = x.createLinearGradient(0, GROUND, 0, H); fg.addColorStop(0, '#7fb0dc'); fg.addColorStop(1, '#3f6f9e');
+    const fg = x.createLinearGradient(0, GROUND, 0, H); fg.addColorStop(0, '#2a3358'); fg.addColorStop(1, '#0c1020');
     x.fillStyle = fg; x.fillRect(0, GROUND, W, H - GROUND);
     x.fillStyle = 'rgba(255,255,255,0.7)'; x.fillRect(0, GROUND - 1, W, 2);
     return c;
