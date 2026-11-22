@@ -162,6 +162,7 @@
       hp: MAX_HP, meter: 0,
       state: 'idle', sf: 0,          // state and frames in state
       move: null, hitDone: false, stun: 0,
+      backHold: 0,                   // frames held away from the opponent (B1 guard by holding back)
       prev: emptyInput(), lastMoves: [], buffer: null,
       stats: { hits: 0, blocks: 0, supers: 0 },
     };
@@ -267,6 +268,13 @@
       const free = !(f.state === 'hitstun' || f.state === 'blockstun' || f.state === 'ko' || f.state === 'attack');
       if (free && f.buffer) { if (f.buffer.move === 'super') pSuper = true; else if (f.buffer.move === 'heavy') pHeavy = true; else pLight = true; f.buffer = null; }
 
+      // B1: count frames of holding back while free on the ground and within reach of the opponent.
+      // Anything else (attack, stun, air, guard button, too far) starts the count again.
+      const backDir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+      const back = backDir !== 0 && backDir !== f.facing;
+      const near = Math.abs(o.x - f.x) <= MOVES.light.reach + 80;
+      if (back && !airborne(f) && !busy(f) && near && !input.guard) f.backHold += 1; else f.backHold = 0;
+
       if (f.state === 'hitstun' || f.state === 'blockstun') {
         f.stun -= 1;
         if (f.stun <= 0) this.setState(f, 'idle');
@@ -296,6 +304,7 @@
         this.events.push({ type: 'jump', side: f.side });
         return;
       }
+      if (f.backHold >= 18) { f.vx = -f.facing * 2; this.setState(f, 'guard', true); return; }
       let dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
       if (dir !== 0) {
         f.vx = dir * (dir === f.facing ? WALK_F : WALK_B);

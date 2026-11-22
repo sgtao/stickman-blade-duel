@@ -173,4 +173,47 @@ for (const k of [3, 6]) {
   const x0 = m.f[0].x; run(m, 10, () => inp({ right: true }));
   check('D2：攻撃中に着地しても、攻撃の状態のまま地上にいる', landed && landedAttack, `landed ${landed}, attack ${landedAttack}`);
   check('D2：着地と攻撃の終了の後は、右へ動ける（操作できる）', (m.f[0].state === 'walk') && m.f[0].x > x0 + 30, `state ${m.f[0].state}, x ${x0}->${m.f[0].x}`); }
+// M10c（B1）：後退の防御。相手と逆向きに 18 フレーム入力し続けると防御になる
+const backIn = () => inp({ left: true });
+const oppGuard = () => inp({ guard: true });
+const guardSeq = (m, n, a = backIn, b = E) => { const st = []; for (let i = 0; i < n; i++) { run(m, 1, a, b); st.push(m.f[0].state); } return st; };
+{ const m0 = fightReady(); place(m0, 400, 500); const st = guardSeq(m0, 18);
+  check('B1：後退を 17 フレーム押すまでは防御にならない', st.slice(0, 17).every(s => s !== 'guard'), st.slice(0, 17).join(','));
+  check('B1：後退を 18 フレーム目に防御になる', st[17] === 'guard', 'state ' + st[17]); }
+{ const m = fightReady(); place(m, 200, 500); const st = guardSeq(m, 30);
+  check('B1：相手が遠い（205 px を超える）と防御にならない', st.every(s => s !== 'guard'), 'last ' + st[29]); }
+{ const m = fightReady(); place(m, 400, 500); run(m, 1, () => inp({ light: true })); const st = guardSeq(m, 20, backIn, oppGuard);
+  check('B1：攻撃中は後退しても防御にならない', st.every(s => s !== 'guard') && m.f[0].state === 'attack', st.join(',')); }
+{ const m = fightReady(); place(m, 420, 500); run(m, 10, backIn, oppGuard); run(m, 1, () => inp({ light: true }), oppGuard); run(m, 30, E, oppGuard);
+  const st = guardSeq(m, 18, backIn, oppGuard);
+  check('B1：攻撃を挟んだら数え直す（17 フレームでは防御にならない）', st.slice(0, 17).every(s => s !== 'guard'), st.slice(0, 17).join(','));
+  check('B1：攻撃を挟んだあと、18 フレーム目に防御になる', st[17] === 'guard', 'state ' + st[17]); }
+for (const kind of ['hitstun', 'blockstun']) {
+  const m = fightReady(); place(m, 400, 500); run(m, 10, backIn); m.f[0].state = kind; m.f[0].sf = 0; m.f[0].stun = 5;
+  run(m, 5, backIn); m.f[0].x = 400; const st = guardSeq(m, 18); // 数えの検査なので、距離を 100 に戻す
+  check(`B1：${kind}を挟んだら数え直す（17 フレームでは防御にならない、18 で防御）`, st.slice(0, 17).every(s => s !== 'guard') && st[17] === 'guard', st.slice(0, 18).join(',')); }
+{ const m = fightReady(); place(m, 400, 500); run(m, 10, backIn); run(m, 1, () => inp({ right: true }));
+  const st = guardSeq(m, 17);
+  check('B1：前向きの入力で数えが 0 に戻る（17 フレームでは防御にならない）', st.every(s => s !== 'guard'), st.join(',')); }
+{ const m = fightReady(); place(m, 400, 500); run(m, 20, () => inp({ left: true, guard: true }));
+  const st = guardSeq(m, 5);
+  check('B1：ガードボタンと同時に押した間は数えない（離した後は防御にならない）', st.every(s => s !== 'guard'), st.join(',')); }
+{ const m = fightReady(); place(m, 400, 500); run(m, 17, backIn); run(m, 1, () => inp({ jump: true, left: true }));
+  check('B1：後退の防御より、ジャンプが優先する', m.f[0].state === 'jump' && m.f[0].y < C.GROUND - 10, `state ${m.f[0].state}`); }
+{ const m = fightReady(); place(m, 400, 500); run(m, 17, backIn); run(m, 1, () => inp({ light: true, left: true }));
+  check('B1：後退の防御より、攻撃が優先する', m.f[0].state === 'attack' && m.f[0].move === 'light', `state ${m.f[0].state}`); }
+{ const m = fightReady(); place(m, 400, 500); run(m, 18, backIn); const s0 = m.f[0].state; run(m, 1); check('B1：離すと次のフレームで防御が解ける', s0 === 'guard' && m.f[0].state !== 'guard', `${s0} -> ${m.f[0].state}`); }
+{ const m = fightReady(); place(m, 400, 500); run(m, 18, backIn); const x0 = m.f[0].x; run(m, 10, backIn);
+  check('B1：防御中は後ろへ毎フレーム 2 動く（10 フレームで 20 px）', m.f[0].state === 'guard' && x0 - m.f[0].x === 20, `x ${x0} -> ${m.f[0].x}`); }
+{ const m = fightReady(); place(m, 400, 500); run(m, 18, backIn); m.f[1].x = m.f[0].x + 100;
+  const evs = run(m, 40, backIn, (i) => inp({ light: i === 0 }));
+  check('B1：防御中に弱を受けても削りは 0', m.f[0].hp === 100 && evs.some(e => e.type === 'block'), 'hp ' + m.f[0].hp); }
+{ const m = fightReady(); place(m, 400, 500); run(m, 18, backIn); m.f[1].x = m.f[0].x + 100;
+  const evs = run(m, 40, backIn, (i) => inp({ heavy: i === 0 }));
+  check('B1：防御中に強を受けると削りの 2 だけ', m.f[0].hp === 98 && evs.some(e => e.type === 'block'), 'hp ' + m.f[0].hp); }
+{ // 空中では数えない：跳んで 6 フレーム後（向きの入力を受け付けない期間の後）から後ろへ入れ続けても、着地の後の 17 フレームでは防御にならない
+  const m = fightReady(); place(m, 400, 500); run(m, 1, () => inp({ jump: true })); run(m, 6); const st = [], air = [];
+  for (let i = 0; i < 60; i++) { run(m, 1, backIn); st.push(m.f[0].state); air.push(C.airborne(m.f[0])); }
+  const j = air.indexOf(false); const after = st.slice(j, j + 17);
+  check('B1：空中では数えない（着地の後、17 フレームでは防御にならない）', air.some(Boolean) && j > 0 && after.every(s => s !== 'guard'), 'landed at ' + j + ' ' + after.join(',')); }
 done('rules.test');
