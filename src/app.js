@@ -565,19 +565,54 @@
     return c;
   }
 
-  function buildDay() {
-    // 昼：明るい空。棒人間が立つ帯（y 400〜600）は、暗い尾根と地面で暗くする（白い体・赤い体・HUD の文字が読めるように）
-    const c = mk(W, H), x = c.getContext('2d'), r = C.mulberry32(37);
-    const sky = x.createLinearGradient(0, 0, 0, 400);
-    sky.addColorStop(0, '#2a62a8'); sky.addColorStop(0.65, '#7fc2f5'); sky.addColorStop(1, '#d6f0ff');
+  // ---------- 昼の背景 ----------
+  // 層：空（静止の雲・太陽・HUD の板）→ 流れる雲（render で描く）→ 山（上部は透明。棒人間の帯と地面を含む）
+  // BG.daySky と BG.dayMountain は層そのもの。BG.day はその 2 枚を合成した 1 枚（既存の検査・画像出力が使う）
+  const DAY = { sprites: [], flow: [] };
+  // 雲の絵：放射グラデーションの円を重ね、下側に青い影を付ける。作るのは 1 回だけ
+  function dayCloudSprite(r, cw, ch, puffs) {
+    const c = mk(cw, ch), x = c.getContext('2d');
+    for (let i = 0; i < puffs; i++) {
+      const t = i / (puffs - 1), px = cw * (0.12 + 0.76 * t) + (r() - 0.5) * cw * 0.05;
+      const mid = 1 - Math.abs(2 * t - 1);
+      const rad = ch * (0.2 + 0.32 * mid * (0.7 + 0.3 * r())), py = ch * 0.6 - rad * 0.25 * mid;
+      const g = x.createRadialGradient(px, py, 0, px, py, rad);
+      g.addColorStop(0, 'rgba(255,255,255,0.98)'); g.addColorStop(0.62, 'rgba(255,255,255,0.9)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = g; x.fillRect(px - rad, py - rad, rad * 2, rad * 2);
+    }
+    x.globalCompositeOperation = 'source-atop'; // 描いた部分の中だけ、下側を青く影にする
+    const sh = x.createLinearGradient(0, ch * 0.45, 0, ch * 0.92);
+    sh.addColorStop(0, 'rgba(150,185,225,0)'); sh.addColorStop(1, 'rgba(112,150,205,0.6)');
+    x.fillStyle = sh; x.fillRect(0, 0, cw, ch);
+    x.globalCompositeOperation = 'source-over';
+    return c;
+  }
+  // 空の層：濃い青（上）→ 淡い水色（地平線 y 430）。太陽と光の筋。静止の雲 2 層。HUD の板（昼だけ）
+  function buildDaySky(r) {
+    const c = mk(W, H), x = c.getContext('2d');
+    const sky = x.createLinearGradient(0, 0, 0, 430);
+    sky.addColorStop(0, '#1f55a2'); sky.addColorStop(0.15, '#2a64b8'); sky.addColorStop(0.55, '#84c4f4'); sky.addColorStop(1, '#dcf4ff');
     x.fillStyle = sky; x.fillRect(0, 0, W, H);
-    // 太陽は右の中ほど（体力ゲージの文字の上には出さない）
-    const sg = x.createRadialGradient(1100, 330, 4, 1100, 330, 120); sg.addColorStop(0, '#fff8d6'); sg.addColorStop(1, 'rgba(255,248,214,0)');
-    x.fillStyle = sg; x.fillRect(980, 210, 240, 240);
-    // 雲は HUD の文字（y 0〜90）の上に出さない
-    for (let i = 0; i < 9; i++) { const cx = r() * W, cy = 150 + r() * 180, cw = 90 + r() * 120; x.fillStyle = 'rgba(255,255,255,0.75)'; x.beginPath(); x.ellipse(cx, cy, cw, cw * 0.3, 0, 0, Math.PI * 2); x.fill(); }
-    // HUD の文字の後ろの暗い板（昼だけ）。雲より後に描き、雲が文字の下に来ないようにする。
-    // 板は drawHUD と同じ座標・フォント（hudK = 1）の文字の箱に 3 px の余白を足したもの。平均輝度を下げすぎないよう、上端の帯にはしない
+    // 太陽：右の中ほど。柔らかい光の筋（薄い扇形を 9 本）と、輝く円
+    const SX = 1060, SY = 250;
+    x.save(); x.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 9; i++) {
+      const a = i * 0.7 + r() * 0.2, b = 0.035;
+      x.fillStyle = 'rgba(255,246,210,0.045)';
+      x.beginPath(); x.moveTo(SX, SY);
+      x.lineTo(SX + Math.cos(a - b) * 900, SY + Math.sin(a - b) * 900); x.lineTo(SX + Math.cos(a + b) * 900, SY + Math.sin(a + b) * 900);
+      x.closePath(); x.fill();
+    }
+    const sg = x.createRadialGradient(SX, SY, 4, SX, SY, 160);
+    sg.addColorStop(0, 'rgba(255,250,225,0.95)'); sg.addColorStop(0.12, 'rgba(255,246,214,0.7)'); sg.addColorStop(1, 'rgba(255,246,214,0)');
+    x.fillStyle = sg; x.fillRect(SX - 160, SY - 160, 320, 320);
+    x.restore();
+    x.fillStyle = '#fffbe8'; x.beginPath(); x.arc(SX, SY, 26, 0, Math.PI * 2); x.fill();
+    // 静止の雲：遠い小さな雲（淡い）と、中くらいの雲。HUD の文字（y 0〜90）の下に出す
+    for (let i = 0; i < 6; i++) { const cw = 90 + r() * 60, cx = r() * W, cy = 200 + r() * 80; x.globalAlpha = 0.5; x.drawImage(DAY.sprites[2], cx - cw / 2, cy - cw * 0.2, cw, cw * 0.4); }
+    for (let i = 0; i < 4; i++) { const cw = 150 + r() * 60, cx = r() * W, cy = 170 + r() * 50; x.globalAlpha = 0.8; x.drawImage(DAY.sprites[1], cx - cw / 2, cy - cw * 0.2, cw, cw * 0.4); }
+    x.globalAlpha = 1;
+    // HUD の文字の後ろの暗い板（昼だけ）。板は drawHUD と同じ座標・フォント（hudK = 1）の文字の箱に 3 px の余白を足したもの
     const hudInk = (font, text, align, px, py) => { x.font = font; x.textAlign = align; x.textBaseline = 'top'; const m = x.measureText(text);
       const l = align === 'right' ? px - m.width : align === 'center' ? px - m.width / 2 : px;
       return [l, py - m.actualBoundingBoxAscent, l + m.width, py + m.actualBoundingBoxDescent]; };
@@ -586,14 +621,88 @@
       hudInk('700 13px system-ui, sans-serif', 'ROUND 3', 'center', 640, 90)];
     x.fillStyle = 'rgba(10,18,44,0.55)';
     for (const b of plates) x.fillRect(b[0] - 3, b[1] - 3, b[2] - b[0] + 6, b[3] - b[1] + 6);
-    // 暗い尾根（棒人間の帯を覆う）
-    x.fillStyle = '#28304f'; x.beginPath(); x.moveTo(0, GROUND);
-    for (let bx = 0; bx <= W; bx += 40) x.lineTo(bx, 380 - 25 * Math.abs(Math.sin(bx * 0.006)));
-    x.lineTo(W, GROUND); x.closePath(); x.fill();
-    const fg = x.createLinearGradient(0, GROUND, 0, H); fg.addColorStop(0, '#2a3358'); fg.addColorStop(1, '#0c1020');
-    x.fillStyle = fg; x.fillRect(0, GROUND, W, H - GROUND);
-    x.fillStyle = 'rgba(255,255,255,0.7)'; x.fillRect(0, GROUND - 1, W, 2);
     return c;
+  }
+  // 山の層：遠い峰（淡い青紫・雪・明暗）→ 中の山（青緑・霞）→ 手前の山（暗い緑紺・木・尾根の縁）→ 地面。上部は透明
+  function buildDayMountains(r) {
+    const c = mk(W, H), x = c.getContext('2d');
+    const BASE = 430;
+    const ridgeFill = (fn, style, bottom) => {
+      x.fillStyle = style; x.beginPath(); x.moveTo(0, fn(0));
+      for (let xx = 8; xx <= W; xx += 8) x.lineTo(xx, fn(xx));
+      x.lineTo(W, bottom); x.lineTo(0, bottom); x.closePath(); x.fill();
+    };
+    // 遠い峰：尖った三角。左の面は暗く、右は明るい。雪の帽子は、ぎざぎざの縁
+    const peaks = [];
+    for (let px = -80; px < W + 160; px += 120 + r() * 110) peaks.push({ x: px, y: 222 + r() * 80, bw: 170 + r() * 120 });
+    peaks.sort((a, b) => b.y - a.y); // 低い峰から描き、高い峰を前に出す
+    const snow = [[0, 0], [0.24, 0.24], [0.13, 0.19], [0.06, 0.26], [-0.03, 0.17], [-0.12, 0.21], [-0.26, 0.25]];
+    for (const p of peaks) {
+      const hgt = BASE - p.y;
+      x.fillStyle = '#8fa4da'; x.beginPath(); x.moveTo(p.x, p.y); x.lineTo(p.x - p.bw, BASE); x.lineTo(p.x, BASE); x.closePath(); x.fill();
+      x.fillStyle = '#bccdf2'; x.beginPath(); x.moveTo(p.x, p.y); x.lineTo(p.x, BASE); x.lineTo(p.x + p.bw, BASE); x.closePath(); x.fill();
+      x.fillStyle = '#f4f8ff'; x.beginPath();
+      snow.forEach(([dx, fy], k) => { const X = p.x + dx * p.bw, Y = p.y + fy * hgt; if (k) x.lineTo(X, Y); else x.moveTo(X, Y); });
+      x.closePath(); x.fill();
+    }
+    // 霞：遠い山の裾だけに（source-atop で、山の画素の上にだけ重ねる）
+    x.save(); x.globalCompositeOperation = 'source-atop';
+    const hz = x.createLinearGradient(0, 300, 0, BASE); hz.addColorStop(0, 'rgba(214,236,255,0)'); hz.addColorStop(1, 'rgba(214,236,255,0.45)');
+    x.fillStyle = hz; x.fillRect(0, 300, W, BASE - 300);
+    x.restore();
+    // 中の山：青緑のなだらか。上は明るく、裾は霞で淡く
+    const midY = (xx) => 318 + 26 * Math.sin(xx * 0.0045 + 0.7) + 14 * Math.sin(xx * 0.013 + 2.1) + 8 * Math.sin(xx * 0.031);
+    const mg = x.createLinearGradient(0, 300, 0, BASE); mg.addColorStop(0, '#a6d6d2'); mg.addColorStop(1, '#5a9298');
+    ridgeFill(midY, mg, BASE);
+    // 手前の山：暗い緑がかった紺（棒人間の帯）。尾根の縁の明るい線、木のシルエット
+    const nearY = (xx) => 392 + 12 * Math.sin(xx * 0.007 + 0.3) + 7 * Math.sin(xx * 0.021 + 1.2) + 4 * Math.sin(xx * 0.05);
+    const ng = x.createLinearGradient(0, 380, 0, H); ng.addColorStop(0, '#2f5761'); ng.addColorStop(0.5, '#23434d'); ng.addColorStop(1, '#1a3139');
+    ridgeFill(nearY, ng, H);
+    x.strokeStyle = 'rgba(170,230,210,0.4)'; x.lineWidth = 2; x.beginPath();
+    for (let xx = 0; xx <= W; xx += 8) { if (xx) x.lineTo(xx, nearY(xx)); else x.moveTo(xx, nearY(xx)); }
+    x.stroke();
+    for (let tx = 0; tx < W; tx += 14 + r() * 22) {
+      const ty = nearY(tx), th = 16 + r() * 20, tw = 7 + r() * 6;
+      x.fillStyle = '#16292f'; x.beginPath(); x.moveTo(tx, ty - th); x.lineTo(tx + tw, ty + 3); x.lineTo(tx - tw, ty + 3); x.closePath(); x.fill();
+    }
+    // 手前の林：もう一段下の尾根（暗く、小さな木）。帯の中で段になり、平らに見えないようにする
+    const forY = (xx) => 448 + 8 * Math.sin(xx * 0.012 + 1.9) + 5 * Math.sin(xx * 0.029 + 0.4);
+    const fo = x.createLinearGradient(0, 440, 0, H); fo.addColorStop(0, '#24474f'); fo.addColorStop(1, '#1a343c');
+    ridgeFill(forY, fo, H);
+    x.strokeStyle = 'rgba(150,220,200,0.25)'; x.lineWidth = 1.5; x.beginPath();
+    for (let xx = 0; xx <= W; xx += 8) { if (xx) x.lineTo(xx, forY(xx)); else x.moveTo(xx, forY(xx)); }
+    x.stroke();
+    for (let tx = 0; tx < W; tx += 9 + r() * 14) {
+      const ty = forY(tx), th = 9 + r() * 12, tw = 4 + r() * 4;
+      x.fillStyle = '#173038'; x.beginPath(); x.moveTo(tx, ty - th); x.lineTo(tx + tw, ty + 2); x.lineTo(tx - tw, ty + 2); x.closePath(); x.fill();
+    }
+    // 地面：暗い緑。草の筋で質感を出す。地面の縁は明るい線（棒人間の足が乗る）
+    const fg = x.createLinearGradient(0, GROUND, 0, H); fg.addColorStop(0, '#4c7d78'); fg.addColorStop(1, '#213f40');
+    x.fillStyle = fg; x.fillRect(0, GROUND, W, H - GROUND);
+    x.strokeStyle = 'rgba(140,200,150,0.18)'; x.lineWidth = 1.2; x.beginPath();
+    for (let i = 0; i < 260; i++) { const gx = r() * W, gy = GROUND + 4 + r() * (H - GROUND - 8); x.moveTo(gx, gy); x.lineTo(gx + (r() - 0.5) * 6, gy - 4 - r() * 4); }
+    x.stroke();
+    x.fillStyle = 'rgba(200,245,225,0.4)'; x.fillRect(0, GROUND - 1, W, 2);
+    return c;
+  }
+  function buildDay() {
+    const r = C.mulberry32(37);
+    // 雲の絵と、流れる雲の並び（作るのは 1 回だけ。並びは時刻 now だけで決まる）
+    DAY.sprites = [dayCloudSprite(C.mulberry32(61), 340, 136, 9), dayCloudSprite(C.mulberry32(62), 340, 136, 7), dayCloudSprite(C.mulberry32(63), 340, 136, 6)];
+    DAY.flow = [{ k: 0, y: 196, w: 330, v: 12, x0: 0.12 }, { k: 1, y: 262, w: 240, v: 8, x0: 0.52 }, { k: 2, y: 168, w: 170, v: 6, x0: 0.78 }, { k: 0, y: 292, w: 280, v: 10, x0: 0.33 }];
+    BG.daySky = buildDaySky(r);
+    BG.dayMountain = buildDayMountains(C.mulberry32(41));
+    const c = mk(W, H);
+    c.getContext('2d').drawImage(BG.daySky, 0, 0); c.getContext('2d').drawImage(BG.dayMountain, 0, 0);
+    return c;
+  }
+  // 流れる雲：空の層の上、山の層の下。位置は now だけで決まり、左右の端で回り込む（毎フレームは drawImage だけ）
+  function drawDayClouds(now) {
+    const t = now / 1000;
+    for (const cl of DAY.flow) {
+      const span = W + 2 * cl.w, x = ((cl.x0 * span + cl.v * t) % span) - cl.w;
+      ctx.drawImage(DAY.sprites[cl.k], x, cl.y - cl.w * 0.2, cl.w, cl.w * 0.4);
+    }
   }
 
   // ---------- Rendering ----------
@@ -784,7 +893,11 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     const sx = S.shake ? rand(-S.shake, S.shake) : 0, sy = S.shake ? rand(-S.shake, S.shake) * 0.6 : 0;
     ctx.translate(sx, sy);
-    ctx.drawImage(BG[stage], -12, -8, W + 24, H + 16);
+    if (stage === 'day') { // 昼：空 → 流れる雲 → 山（山の層は上部が透明）
+      ctx.drawImage(BG.daySky, -12, -8, W + 24, H + 16);
+      drawDayClouds(now);
+      ctx.drawImage(BG.dayMountain, -12, -8, W + 24, H + 16);
+    } else ctx.drawImage(BG[stage], -12, -8, W + 24, H + 16);
     drawStageAnim(stage, now);
     if (m) {
       // draw attacker on top
