@@ -35,7 +35,7 @@
   .btn small { display: block; font-size: .55em; color: var(--dim); font-weight: 600; letter-spacing: 0; margin-top: .2em; }
   .btn.lv-weak.sel, .btn.lv-weak:hover { border-color: #7dffa8; box-shadow: 0 0 18px rgba(125,255,168,.5); }
   .btn.lv-strong.sel, .btn.lv-strong:hover { border-color: var(--red); box-shadow: 0 0 18px rgba(255,77,94,.6); }
-  #ui { container-type: inline-size; }
+  #ui { container-type: size; }
   .win { color: var(--cyan); text-shadow: 0 0 18px rgba(94,231,255,.8); }
   .lose { color: var(--red); text-shadow: 0 0 18px rgba(255,77,94,.8); }
   .draw { color: #ffd45e; text-shadow: 0 0 18px rgba(255,212,94,.7); }
@@ -43,7 +43,9 @@
   body.touch.fighting #pad { display: block; }
   body.touch .kbd { display: none; }
   body:not(.touch) .tch { display: none; }
-  .help { font-size: clamp(11px, 1.5cqw, 16px) !important; line-height: 1.6; max-width: 92%; }
+  .help { font-size: clamp(11px, 1.5cqw, 16px) !important; line-height: 1.6; max-width: 92%;
+    background: rgba(4,6,16,.72); border-radius: 10px; padding: .35em .5em; }
+  .help .nb { white-space: nowrap; }
   .help b { color: var(--ink); }
   .pbtn { position: absolute; pointer-events: auto; touch-action: none; border-radius: 50%; border: 2px solid rgba(140,160,255,.45);
     background: radial-gradient(circle at 50% 40%, rgba(40,50,110,.95), rgba(14,18,44,.95)); color: #fff; font-weight: 900;
@@ -53,6 +55,16 @@
   .pbtn.sup { border-color: rgba(255,212,94,.7); }
   .pbtn.sup.ready { box-shadow: 0 0 18px rgba(255,212,94,.9); }
   .pbtn small { display: block; font-size: 10px; opacity: .75; font-weight: 700; }
+  /* 盤面の枠が低いとき（高さ 170 px 以下）だけ、高さに合わせて縮める。それより高い枠の見た目は変えない */
+  @container (max-height: 170px) {
+    .screen { gap: 1.6cqh; padding: 2cqh 3cqw; }
+    .screen h1 { font-size: clamp(16px, min(6.2cqw, 10.5cqh), 76px); line-height: 1; }
+    .screen h2 { font-size: clamp(14px, min(4cqw, 6.7cqh), 48px); }
+    .screen p { font-size: clamp(10px, min(1.6cqw, 2.5cqh), 18px); }
+    .row { gap: min(2.2cqw, 3.9cqh); }
+    .btn { font-size: clamp(13px, min(2.1cqw, 3.33cqh), 24px); }
+    .help { font-size: clamp(10px, min(1.5cqw, 2.2cqh), 16px) !important; line-height: 1.4; padding: .2em .5em; }
+  }
 </style>
 </head>
 <body>
@@ -68,8 +80,8 @@
     <h1>STICKMAN<br><span>BLADE</span> DUEL</h1>
     <p>光る剣の棒人間で、CPU と 1 対 1。2 本先取で勝ち。</p>
     <div class="row"><button class="btn sel" data-act="start">スタート<small class="kbd">Enter</small></button></div>
-    <p class="help kbd"><b>A/D</b> 移動　<b>W</b> ジャンプ　<b>S</b> 押し続けてガード　<b>J</b> 弱　<b>K</b> 強　<b>L</b> 必殺（ゲージ満タン）　<b>P</b> 一時停止　<b>M</b> 消音</p>
-    <p class="help tch"><b>◀▶</b> 移動　<b>▲</b> ジャンプ　<b>守</b> 押し続けてガード　<b>弱・強</b> 攻撃　<b>必殺</b> ゲージ満タンで稲妻（跳んでかわせる）</p>
+    <p class="help kbd"><span class="nb"><b>A/D</b> 移動</span>　<span class="nb"><b>W</b> ジャンプ</span>　<span class="nb"><b>S</b> 押し続けてガード</span>　<span class="nb"><b>J</b> 弱</span>　<span class="nb"><b>K</b> 強</span>　<span class="nb"><b>L</b> 必殺（ゲージ満タン）</span>　<span class="nb"><b>P</b> 一時停止</span>　<span class="nb"><b>M</b> 消音</span></p>
+    <p class="help tch"><span class="nb"><b>◀▶</b> 移動</span>　<span class="nb"><b>▲</b> ジャンプ</span>　<span class="nb"><b>守</b> 押し続けてガード</span>　<span class="nb"><b>弱・強</b> 攻撃</span>　<span class="nb"><b>必殺</b> ゲージ満タンで稲妻（跳んでかわせる）</span></p>
   </section>
   <section class="screen" id="scrSelect">
     <h2>CPU の強さ</h2>
