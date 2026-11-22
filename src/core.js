@@ -8,6 +8,8 @@
   const INTRO_FRAMES = 90, ROUND_END_FRAMES = 150;
   const STAGE_LEFT = 80, STAGE_RIGHT = W - 80, MIN_GAP = 70;
   const GRAVITY = 0.9, JUMP_V = -17, WALK_F = 5, WALK_B = 4, JUMP_STEER_FRAMES = 6;
+  const HIT_DY = 140;      // normal moves connect while |attacker y - target y| <= HIT_DY
+  const SUPER_CLEAR = 100; // the lightning misses a target higher than this off the ground
 
   // Move table. Frames: startup, active, recovery.
   const MOVES = {
@@ -233,8 +235,8 @@
         const dx = (o.x - f.x) * f.facing;
         if (dx < -20 || dx > m.reach) continue;
         const dy = Math.abs(o.y - f.y);
-        if (f.move === 'super' && o.y < GROUND - 70) continue; // jumped over the lightning
-        if (f.move !== 'super' && dy > 110) continue;
+        if (f.move === 'super' && o.y < GROUND - SUPER_CLEAR) continue; // jumped over the lightning
+        if (f.move !== 'super' && dy > HIT_DY) continue;
         hits.push({ i, move: f.move });
       }
       // Trade: both connect on the same frame.
@@ -467,5 +469,6 @@
   }
 
   root.Core = { W, H, GROUND, FPS, ROUND_FRAMES, MAX_HP, MAX_METER, WINS_NEEDED, MAX_ROUNDS, INTRO_FRAMES, ROUND_END_FRAMES,
+    HIT_DY, SUPER_CLEAR,
     MOVES, ACTIONS, AI_LEVELS, mulberry32, emptyInput, Match, AI, simulate, airborne };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
