@@ -63,6 +63,71 @@ for (const [label, w, h] of [['縦 390×844', 390, 844], ['横 844×390', 844, 3
   check('ボタン同士が重ならない', pairs.length === 0, pairs.join(' '));
   const onGame = KEYS.filter(k => overlap(rects[k], rects.canvas));
   check('ボタンが試合の画面（体力ゲージを含む）と重ならない', onGame.length === 0, onGame.join(','));
+  // B2 の配置（PLAN 2 の決定 1・10）。①左：◀▶必殺 ②右：右端の列＝ジャンプ・守・強、強の左隣に弱 ③縦の余白 12 px 以上
+  {
+    const cxOf = (k) => rects[k].x + rects[k].w / 2, cyOf = (k) => rects[k].y + rects[k].h / 2;
+    const rOf = (k) => rects[k].x + rects[k].w, bOf = (k) => rects[k].y + rects[k].h;
+    const half = w / 2;
+    const pos = KEYS.map(k => k + '(' + cxOf(k).toFixed(1) + ',' + cyOf(k).toFixed(1) + ')').join(' ');
+    check('B2①左の 3 つ（◀ ▶ 必殺）の中心が、画面の中央より左', ['left', 'right', 'super'].every(k => cxOf(k) < half), pos);
+    check('B2②右の 4 つ（ジャンプ・守・強・弱）の中心が、画面の中央より右', ['jump', 'guard', 'light', 'heavy'].every(k => cxOf(k) > half), pos);
+    const spanL = Math.min(rects.left.x, rects.right.x), spanR = Math.max(rOf('left'), rOf('right'));
+    const topLR = Math.min(rects.left.y, rects.right.y);
+    check('B2①必殺は ◀▶ の範囲の中、下端が ◀▶ の上端より 8 px 以上上',
+      rects.super.x >= spanL - 0.5 && rOf('super') <= spanR + 0.5 && topLR - bOf('super') >= 8 - 0.01,
+      `必殺 x ${rects.super.x.toFixed(1)}〜${rOf('super').toFixed(1)}、◀▶ x ${spanL.toFixed(1)}〜${spanR.toFixed(1)}、必殺下端 ${bOf('super').toFixed(1)}、◀▶上端 ${topLR.toFixed(1)}`);
+    check('B2②ジャンプ・守・強の中心の x が ±2 px で揃う',
+      Math.abs(cxOf('jump') - cxOf('guard')) <= 2 && Math.abs(cxOf('guard') - cxOf('heavy')) <= 2,
+      `jump ${cxOf('jump').toFixed(1)} guard ${cxOf('guard').toFixed(1)} heavy ${cxOf('heavy').toFixed(1)}`);
+    check('B2②右端の列は、ジャンプ・守・強（上から）。弱はその左',
+      rOf('jump') >= rOf('light') - 0.5 && rOf('guard') >= rOf('light') - 0.5 && rOf('heavy') >= rOf('light') - 0.5
+      && cyOf('jump') < cyOf('guard') && cyOf('guard') < cyOf('heavy') && rOf('light') <= rects.heavy.x + 0.5,
+      `y: jump ${cyOf('jump').toFixed(1)} guard ${cyOf('guard').toFixed(1)} heavy ${cyOf('heavy').toFixed(1)}, 弱右端 ${rOf('light').toFixed(1)} 強左端 ${rects.heavy.x.toFixed(1)}`);
+    check('B2②弱の中心の y が強と ±2 px 以内',
+      Math.abs(cyOf('light') - cyOf('heavy')) <= 2, `弱 ${cyOf('light').toFixed(1)} 強 ${cyOf('heavy').toFixed(1)}`);
+    check('B2③ジャンプと守、守と強の縦の余白が 12 px 以上',
+      rects.guard.y - bOf('jump') >= 12 - 0.01 && rects.heavy.y - bOf('guard') >= 12 - 0.01,
+      `ジャンプ→守 ${(rects.guard.y - bOf('jump')).toFixed(1)}、守→強 ${(rects.heavy.y - bOf('guard')).toFixed(1)}`);
+  }
+  // B4b 必殺ボタンの表示：0 で off（灰色・aria-disabled=true）、100 で ready（金色・aria-disabled=false）。押せなくても受ける
+  if (w === 844) {
+    const supState = () => page.evaluate(() => { const b = document.querySelector('.pbtn.sup'); return { ad: b.getAttribute('aria-disabled'), off: b.classList.contains('off'), ready: b.classList.contains('ready'), dis: b.disabled }; });
+    // 必殺ボタンの中心から、ボタン幅の 30% 以内の画素の平均輝度（0.2126R+0.7152G+0.0722B）
+    const supLum = async () => {
+      const r = await page.evaluate(() => { const b = document.querySelector('.pbtn.sup').getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; });
+      const buf = await page.screenshot({ clip: { x: r.x, y: r.y, width: r.w, height: r.h } });
+      return page.evaluate(async ([b64, bw]) => {
+        const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
+        const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+        const g = c.getContext('2d'); g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, c.width, c.height).data;
+        const sc = img.width / bw, cx = img.width / 2, cy = img.height / 2, rad = 0.3 * bw * sc;
+        let s = 0, n = 0;
+        for (let y = 0; y < img.height; y++) for (let x = 0; x < img.width; x++) {
+          if ((x - cx) ** 2 + (y - cy) ** 2 > rad * rad) continue;
+          const i = (y * img.width + x) * 4; s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; n++;
+        }
+        return s / n;
+      }, [buf.toString('base64'), r.w]);
+    };
+    await page.evaluate(() => { window.__game.S.match.f[0].meter = 0; }); await page.waitForTimeout(150);
+    const s0 = await supState(); const lum0 = await supLum();
+    check('B4b ゲージ 0：off（灰色）・aria-disabled=true・disabled 属性なし', s0.off && !s0.ready && s0.ad === 'true' && !s0.dis, JSON.stringify(s0));
+    const n0 = await page.evaluate(() => window.__game.state().match.f[0]);
+    // aria-disabled の間は Playwright が「押せない」と判定するため force で送る。最前面がこのボタンか、先に確かめる
+    const front = await page.evaluate(() => { const b = document.querySelector('.pbtn.sup').getBoundingClientRect(); const e = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return e && e.dataset.k; });
+    check('B4b 押せない間も、必殺ボタンが最前面でポインタを受ける', front === 'super', String(front));
+    await page.tap('.pbtn[data-k=super]', { force: true }); await page.waitForTimeout(250);
+    const n1 = await page.evaluate(() => window.__game.state().match.f[0]);
+    check('B4b 押せない間にタップしても必殺は出ない', !(n1.state === 'attack' && n1.move === 'super') && n1.meter === 0, `state ${n1.state} move ${n1.move} meter ${n1.meter} (前 ${n0.meter})`);
+    await page.evaluate(() => { window.__game.S.match.f[0].meter = 100; }); await page.waitForTimeout(150);
+    const s1 = await supState(); const lums = [];
+    for (let i = 0; i < 3; i++) { lums.push(await supLum()); await page.waitForTimeout(120); }
+    check('B4b ゲージ 100：ready（金色）・aria-disabled=false', s1.ready && !s1.off && s1.ad === 'false' && !s1.dis, JSON.stringify(s1));
+    const diffs = lums.map(v => Math.abs(v - lum0)); const minDiff = Math.min(...diffs);
+    check('B4b 0 と 100 の中心の輝度差が 25 以上（3 枚中の最小）', minDiff >= 25,
+      `0: ${lum0.toFixed(1)}、100: ${lums.map(v => v.toFixed(1)).join(' / ')}、最小差 ${minDiff.toFixed(1)}`);
+    await page.evaluate(() => { window.__game.S.match.f[0].meter = 0; }); await page.waitForTimeout(150);
+  }
   const onTop = KEYS.filter(k => overlap(rects[k], rects.pause) || overlap(rects[k], rects.mute));
   check('一時停止・消音ボタンとも重ならない', onTop.length === 0 && inView(rects.pause) && inView(rects.mute), onTop.join(','));
   check('試合の画面が画面内に収まり、幅 360 px 以上', inView(rects.canvas) && rects.canvas.w >= 360, JSON.stringify(rects.canvas));

@@ -53,7 +53,8 @@
   .pbtn.on { border-color: var(--cyan); box-shadow: 0 0 16px rgba(94,231,255,.8); background: radial-gradient(circle, rgba(60,90,170,.95), rgba(20,30,70,.95)); }
   .pbtn.atk { border-color: rgba(255,120,130,.55); }
   .pbtn.sup { border-color: rgba(255,212,94,.7); }
-  .pbtn.sup.ready { box-shadow: 0 0 18px rgba(255,212,94,.9); }
+  .pbtn.sup.off { border-color: rgba(150,150,160,.5); background: radial-gradient(circle at 50% 40%, rgba(64,66,74,.95), rgba(28,30,36,.95)); }
+  .pbtn.sup.ready { border-color: #ffd45e; text-shadow: 0 1px 2px rgba(80,40,0,.9); background: radial-gradient(circle at 50% 40%, rgba(255,214,94,.98), rgba(214,140,30,.98)); box-shadow: 0 0 18px rgba(255,212,94,.9); }
   .pbtn small { display: block; font-size: 10px; opacity: .75; font-weight: 700; }
   /* 盤面の枠が低いとき（高さ 180 px 以下）だけ、高さに合わせて縮める。それより高い枠の見た目は変えない */
   @container (max-height: 180px) {

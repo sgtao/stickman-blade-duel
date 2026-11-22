@@ -777,33 +777,38 @@
       uiBox = [0, tb, vw, vh - tb];
       const areaY = cy + ch + 8, areaH = vh - areaY - 8;
       const s = Math.max(52, Math.min(84, areaH / 3.3, vw / 5.2));
-      const by = areaY + Math.max(0, (areaH - s * 2.6) / 2);
-      const gap = s * 0.18;
-      place(pads.jump, 14 + s * 0.55, by, s, s);
-      place(pads.left, 14, by + s + gap * 2, s, s);
-      place(pads.right, 14 + s + gap * 2, by + s + gap * 2, s, s);
-      const rx = vw - 14 - s * 2 - gap * 2;
-      place(pads.light, rx, by, s, s);
-      place(pads.heavy, rx + s + gap * 2, by, s, s);
-      place(pads.guard, rx, by + s + gap * 2, s, s);
-      place(pads.super, rx + s + gap * 2, by + s + gap * 2, s, s);
+      // 3 行。右：上からジャンプ・守・強（右端の列）、弱は強の左隣。左：◀▶ を下段、必殺はその上（◀▶ の中央）
+      const gap = Math.max(12, s * 0.12);
+      const by = areaY + Math.max(0, (areaH - (s * 3 + gap * 2)) / 2);
+      const row1 = by, row2 = by + s + gap, row3 = by + s * 2 + gap * 2;
+      place(pads.left, 14, row3, s, s);
+      place(pads.right, 14 + s + gap * 2, row3, s, s);
+      place(pads.super, 14 + s / 2 + gap, row2, s, s); // ◀▶ の範囲（14〜14+2s+2gap）の中央
+      const rightX = vw - 14 - s;
+      place(pads.jump, rightX, row1, s, s);
+      place(pads.guard, rightX, row2, s, s);
+      place(pads.heavy, rightX, row3, s, s);
+      place(pads.light, rightX - s - gap * 2, row3, s, s);
     } else {
       // Landscape: side panels hold the pad; the game sits in the middle.
       const s = Math.max(48, Math.min(64, vh / 6.6));
-      const gap = s * 0.12;
-      const side = s * 2 + gap * 2 + 14;
+      const gap = Math.max(12, s * 0.12);
+      // 側の幅は従来の式のまま（試合の画面の大きさを変えない）
+      const side = s * 2 + s * 0.12 * 2 + 14;
       cw = Math.min(vw - side * 2, vh * 16 / 9); ch = cw * 9 / 16; cx = (vw - cw) / 2; cy = (vh - ch) / 2;
       place(top, cx, 0, cw, Math.max(0, cy));
       top.style.display = cy >= 40 ? 'flex' : 'none';
       const bottom = vh - 12;
-      place(pads.jump, 10 + s * 0.55, bottom - s * 2 - gap, s, s);
-      place(pads.left, 10, bottom - s, s, s);
-      place(pads.right, 10 + s + gap, bottom - s, s, s);
-      const rx = vw - 10 - s * 2 - gap;
-      place(pads.light, rx, bottom - s * 2 - gap, s, s);
-      place(pads.heavy, rx + s + gap, bottom - s * 2 - gap, s, s);
-      place(pads.guard, rx, bottom - s, s, s);
-      place(pads.super, rx + s + gap, bottom - s, s, s);
+      // 3 行。左：◀▶ を下段、必殺はその上（◀▶ の中央）。右：右端の列がジャンプ・守・強（上から）、弱は強の左隣
+      const row3 = bottom - s, row2 = row3 - s - gap, row1 = row2 - s - gap;
+      place(pads.left, 10, row3, s, s);
+      place(pads.right, 10 + s + gap, row3, s, s);
+      place(pads.super, 10 + s / 2 + gap / 2, row2, s, s); // ◀▶ の範囲（10〜10+2s+gap）の中央
+      const rightX = vw - 10 - s;
+      place(pads.jump, rightX, row1, s, s);
+      place(pads.guard, rightX, row2, s, s);
+      place(pads.heavy, rightX, row3, s, s);
+      place(pads.light, rightX - s - gap, row3, s, s);
       // put pause / mute into the left panel when the bar is hidden
       if (cy < 40) {
         top.style.display = 'flex'; place(top, 4, 6, side - 8, 40); top.querySelector('.name').style.display = 'none';
@@ -835,7 +840,11 @@
     } else acc = 0;
     if (S.screen !== 'pause') updateFx(dt * S.timeScale);
     const sup = document.querySelector('.pbtn.sup');
-    if (sup && S.match) sup.classList.toggle('ready', S.match.f[0].meter >= C.MAX_METER);
+    if (sup) { // 必殺の表示：ゲージ 100 未満は off（灰色）、100 で ready（金色）。押せなくても、ポインタのイベントは受ける
+      const ready = !!S.match && S.match.f[0].meter >= C.MAX_METER;
+      sup.classList.toggle('ready', ready); sup.classList.toggle('off', !ready);
+      sup.setAttribute('aria-disabled', ready ? 'false' : 'true');
+    }
     render(now);
     const t1 = performance.now();
     if (perf.record) { perf.samples.push(t1 - t0); perf.frames += 1; }
