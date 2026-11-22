@@ -136,4 +136,41 @@ for (const k of [8, 10]) { // 既存の「押す時刻 14」と同じ数え方�
   const m = fightReady(); place(m, 400, 900); m.f[0].meter = 100;
   run(m, 1, () => inp({ super: true })); run(m, k); run(m, 1, null, () => inp({ jump: true })); run(m, 60);
   check(`必殺技：押す時刻 ${k} で跳んでかわせる`, m.f[1].hp === 100, 'hp ' + m.f[1].hp); }
+// M10b（D2）：空中攻撃。跳んだ次のフレームを 1 とし、k フレーム目に押す（相手は水平距離 100 px、地面に立つ）
+function airAttack(m, k, key, n = 60, guard = false) {
+  const evs = []; let st = null;
+  for (let i = 0; i <= n; i++) {
+    const a = i === 0 ? inp({ jump: true }) : (i === k ? inp({ [key]: true }) : E());
+    const b = guard ? inp({ guard: true }) : E();
+    evs.push(...m.step([a, b]));
+    if (i === k) st = { state: m.f[0].state, move: m.f[0].move, air: C.airborne(m.f[0]) };
+  }
+  return { evs, st };
+}
+for (const k of [4, 10]) {
+  const m = fightReady(); place(m, 500, 600); const { st } = airAttack(m, k, 'heavy', k);
+  check(`D2：空中の強（押す時刻 ${k}）：空中のまま強攻撃の状態になる`, st.air && st.state === 'attack' && st.move === 'heavy', `state ${st.state}, move ${st.move}`);
+}
+for (const k of [4, 10]) {
+  const m = fightReady(); place(m, 500, 600); airAttack(m, k, 'heavy');
+  check(`D2：空中の強（押す時刻 ${k}）：届く相手に当たり 14 減る`, m.f[1].hp === 86, 'hp ' + m.f[1].hp);
+}
+for (const k of [3, 6]) {
+  const m = fightReady(); place(m, 500, 600); const { st } = airAttack(m, k, 'light');
+  check(`D2：空中の弱（押す時刻 ${k}）：攻撃の状態になり、当たると 6 減る`, st.state === 'attack' && st.move === 'light' && m.f[1].hp === 94, `state ${st.state}, hp ${m.f[1].hp}`);
+}
+{ const m = fightReady(); place(m, 400, 900); m.f[0].meter = 100; const { st } = airAttack(m, 5, 'super', 20);
+  check('D2：空中で必殺を押しても出ない（ゲージは 100 のまま）', st.state !== 'attack' && m.f[0].meter === 100 && m.f[0].stats.supers === 0, `state ${st.state}, meter ${m.f[0].meter}`); }
+{ const m = fightReady(); place(m, 500, 600); const { evs } = airAttack(m, 4, 'heavy', 60, true);
+  check('D2：ガードの相手に空中の強が当たると、削りの 2 だけ', m.f[1].hp === 98 && evs.some(e => e.type === 'block'), 'hp ' + m.f[1].hp); }
+{ const m = fightReady(); place(m, 500, 600); airAttack(m, 4, 'light', 60, true);
+  check('D2：ガードの相手に空中の弱が当たると、削りは 0', m.f[1].hp === 100, 'hp ' + m.f[1].hp); }
+{ // 着地の瞬間に攻撃中（強は 52 フレーム続く）。着地の後も状態が壊れず、攻撃が終わると操作できる
+  const m = fightReady(); place(m, 400, 900); run(m, 1, () => inp({ jump: true })); run(m, 29); run(m, 1, () => inp({ heavy: true }));
+  let landed = false, landedAttack = false;
+  for (let i = 0; i < 12; i++) { m.step([E(), E()]); if (m.f[0].y === C.GROUND && m.f[0].vy === 0) { landed = true; if (m.f[0].state === 'attack') landedAttack = true; } }
+  run(m, 60);
+  const x0 = m.f[0].x; run(m, 10, () => inp({ right: true }));
+  check('D2：攻撃中に着地しても、攻撃の状態のまま地上にいる', landed && landedAttack, `landed ${landed}, attack ${landedAttack}`);
+  check('D2：着地と攻撃の終了の後は、右へ動ける（操作できる）', (m.f[0].state === 'walk') && m.f[0].x > x0 + 30, `state ${m.f[0].state}, x ${x0}->${m.f[0].x}`); }
 done('rules.test');

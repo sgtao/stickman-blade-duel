@@ -281,7 +281,7 @@
       const inAir = airborne(f);
       // Start attacks (priority: super > heavy > light).
       if (pSuper && f.meter >= MAX_METER && !inAir) return this.startAttack(f, 'super');
-      if (pHeavy && !inAir) return this.startAttack(f, 'heavy');
+      if (pHeavy) return this.startAttack(f, 'heavy');
       if (pLight) return this.startAttack(f, 'light');
       if (inAir) {
         // A direction pressed within a few frames after takeoff still steers the jump (keys are never pressed on the same frame).
