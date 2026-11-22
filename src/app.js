@@ -310,7 +310,8 @@
     const m = S.match;
     if (!m || m.paused) return;
     if (S.hitstop > 0) { S.hitstop -= 1; return; }
-    const p1 = S.auto ? S.auto.decide(m, 0) : readInput(m.phase === 'fight');
+    // Always consume the latch, so a press made between rounds is not carried into the next fight (A1).
+    const p1 = S.auto ? S.auto.decide(m, 0) : readInput(true);
     const p2 = S.cpu.decide(m, 1);
     const evs = m.step([p1, p2]);
     handleEvents(evs);

@@ -45,6 +45,23 @@ await page.keyboard.press('KeyM'); v = await st(); check('M：もう一度で戻
 await page.click('#btnMute'); v = await st(); check('消音ボタン：音量 0', v.master === 0);
 await page.click('#btnMute'); v = await st(); check('消音ボタン：戻る', v.master > 0);
 
+// A1：2 回戦・3 回戦の開始から 1 秒、移動の入力だけでは攻撃にならない。前ラウンドの終わりに押した攻撃や、押しっぱなしの攻撃を持ち越さない
+async function roundStartCase(label, toRound, setup) {
+  await page.evaluate(() => { const m = window.__game.S.match; if (m.round === 1) m.f[1].hp = 0; else { m.f[0].hp = 0; m.f[1].hp = 0; } });
+  if (!await until(async () => (await st()).match.phase === 'roundEnd', 5000)) { check(label + '：前ラウンドの終わりまで進む', false); return; }
+  if (setup === 'tap') await page.keyboard.press('KeyJ');       // 終わりの間に攻撃を 1 回押す
+  if (setup === 'held') await page.keyboard.down('KeyJ');        // 攻撃を押しっぱなしのまま次のラウンドへ
+  await until(async () => { const s = await st(); return s.match.round === toRound && s.match.phase === 'fight'; }, 20000);
+  if (setup === 'held') await page.keyboard.up('KeyJ');
+  await page.keyboard.down('KeyD');                              // 移動の入力だけ
+  const t = Date.now(); let attackSeen = 0, samples = 0;
+  while (Date.now() - t < 1000) { const s = await st(); samples++; if (s.match.f[0].state === 'attack') attackSeen++; await wait(15); }
+  await page.keyboard.up('KeyD');
+  check(`A1：${label}の開始 1 秒、移動の入力だけで攻撃にならない`, attackSeen === 0, `attack ${attackSeen}/${samples}`);
+}
+await roundStartCase('2 回戦（終わりに攻撃を押す）', 2, 'tap');
+await roundStartCase('3 回戦（攻撃を押しっぱなし）', 3, 'held');
+
 // 残りは自動の「強い」に操作させ、速めて最後まで流す。スローの長さを実時間で測る
 await page.evaluate(() => {
   const g = window.__game; g.S.cpu = new window.Core.AI('strong', 99); g.S.auto = new window.Core.AI('strong', 7); g.debug.speed = 6;

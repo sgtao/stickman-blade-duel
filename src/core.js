@@ -84,6 +84,7 @@
 
       if (this.phase === 'intro') {
         if (this.pf === 1) this.events.push({ type: 'announce', text: 'ROUND ' + this.round });
+        this.syncPrev(in0, in1);
         if (this.pf >= INTRO_FRAMES) { this.phase = 'fight'; this.pf = 0; this.events.push({ type: 'fight' }); }
         this.idleUpdate();
         return this.events;
@@ -98,6 +99,7 @@
         return this.events;
       }
       if (this.phase === 'roundEnd') {
+        this.syncPrev(in0, in1);
         for (const f of this.f) { // let poses play out: the loser falls, a finished swing returns to stance
           f.sf += 1;
           if (f.state === 'attack' && f.sf >= MOVES[f.move].startup + MOVES[f.move].active + MOVES[f.move].recovery) { f.state = 'idle'; f.sf = 0; f.move = null; }
@@ -113,6 +115,13 @@
 
     idleUpdate() {
       for (const f of this.f) { f.sf += 1; }
+    }
+
+    // Outside the fight, keys are only recorded, never acted on. A key held through the
+    // transition must not count as a new press when the fight starts (A1).
+    syncPrev(in0, in1) {
+      this.f[0].prev = Object.assign({}, in0);
+      this.f[1].prev = Object.assign({}, in1);
     }
 
     pressed(f, input, key) { return input[key] && !f.prev[key]; }
