@@ -189,9 +189,50 @@
   function airborne(f) { return f.y < GROUND - 0.5; }
   function busy(f) { return f.state === 'attack' || f.state === 'hitstun' || f.state === 'blockstun' || f.state === 'ko'; }
 
+  // M14c：剣の形による判定。刃（手→刃先、半径 R_BLADE）が、相手の体の形（頭の円、線分の半径 R_BODY）に触れたら当たる。
+  // 刃は前のフレームから今のフレームまでを 3 分割して掃引する（速い振りのすり抜けを防ぐ）。
+  const R_BLADE = 6, R_BODY = 8, R_HEAD = 13;
+  function ptSeg(p, a, b) {
+    const abx = b[0] - a[0], aby = b[1] - a[1];
+    const L = abx * abx + aby * aby;
+    let t = L ? ((p[0] - a[0]) * abx + (p[1] - a[1]) * aby) / L : 0;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(p[0] - a[0] - t * abx, p[1] - a[1] - t * aby);
+  }
+  function segSeg(a, b, c, d) {
+    const cr = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+    const d1 = cr(c, d, a), d2 = cr(c, d, b), d3 = cr(a, b, c), d4 = cr(a, b, d);
+    if (d1 * d2 < 0 && d3 * d4 < 0) return 0;
+    return Math.min(ptSeg(a, c, d), ptSeg(b, c, d), ptSeg(c, a, b), ptSeg(d, a, b));
+  }
+  // 相手の体の形（頭の円と 9 本の線分）。相手の剣は含めない。
+  function bodyShapes(p) {
+    return [
+      [p.head, p.head, R_HEAD], [p.neck, p.hip, R_BODY],
+      [p.shoulder, p.elbow, R_BODY], [p.elbow, p.hand, R_BODY],
+      [p.shoulder, p.elbow2, R_BODY], [p.elbow2, p.hand2, R_BODY],
+      [p.hip, p.kneeA, R_BODY], [p.kneeA, p.footA, R_BODY],
+      [p.hip, p.kneeB, R_BODY], [p.kneeB, p.footB, R_BODY],
+    ];
+  }
+  // 攻撃 f の刃が、相手 o の体に触れているか（現在のフレームの掃引）。
+  function bladeTouches(f, o) {
+    const cur = pose(f), prv = pose(Object.assign({}, f, { sf: f.sf - 1 }));
+    const shapes = bodyShapes(pose(o));
+    for (let j = 1; j <= 3; j++) {
+      const t = j / 3;
+      const h = [prv.hand[0] + (cur.hand[0] - prv.hand[0]) * t, prv.hand[1] + (cur.hand[1] - prv.hand[1]) * t];
+      const tip = [prv.tip[0] + (cur.tip[0] - prv.tip[0]) * t, prv.tip[1] + (cur.tip[1] - prv.tip[1]) * t];
+      for (const [a, b, r] of shapes) if (segSeg(h, tip, a, b) <= R_BLADE + r) return true;
+    }
+    return false;
+  }
+
   class Match {
     constructor(opts) {
       opts = opts || {};
+      // 'legacy'：中心間の距離と高さ（旧）。'blade'：剣の形（M14c）。既定は切り替えまで 'legacy'。
+      this.hitModel = opts.hitModel === 'blade' ? 'blade' : 'legacy';
       this.seed = (opts.seed == null ? 1 : opts.seed) >>> 0;
       this.rng = mulberry32(this.seed);
       this.round = 0;
@@ -384,6 +425,11 @@
         if (f.state !== 'attack' || f.hitDone) continue;
         const m = MOVES[f.move];
         if (f.sf < m.startup || f.sf >= m.startup + m.active) continue;
+        if (f.move !== 'super' && this.hitModel === 'blade') { // M14c：通常技は刃の形で判定する
+          if (!bladeTouches(f, o)) continue;
+          hits.push({ i, move: f.move });
+          continue;
+        }
         const dx = (o.x - f.x) * f.facing;
         if (dx < -20 || dx > m.reach) continue;
         const dy = Math.abs(o.y - f.y);

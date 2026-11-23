@@ -1,7 +1,7 @@
 // すべての検査を順に実行する
 import { spawnSync } from 'child_process'; import path from 'path';
 const dir = path.dirname(new URL(import.meta.url).pathname);
-const list = ['check_static', 'rules.test', 'pose_core.test', 'ai_strength', 'e2e_flow', 'visual', 'day_stage', 'perf', 'mobile', 'screens_fit'];
+const list = ['check_static', 'rules.test', 'blade_hit.test', 'pose_core.test', 'ai_strength', 'e2e_flow', 'visual', 'day_stage', 'perf', 'mobile', 'screens_fit'];
 const only = process.argv.slice(2);
 let ng = [];
 for (const t of list) {
