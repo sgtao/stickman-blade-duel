@@ -1744,10 +1744,15 @@
         top.style.display = 'flex'; place(top, sa.l, 6, Math.max(0, cx - BOARD_GAP - sa.l), 40); top.querySelector('.name').style.display = 'none';
       } else top.querySelector('.name').style.display = '';
     }
-    // 左利き：全ボタンの x を、安全領域の中で左右に折り返す（x' = vw − mR + mL − x − 幅）。段（y）・大きさ・操作（data-k）は変えない
+    // 左利き：◀▶（left・right・super）は左下のまま動かさない（左右の配置は変えない）。
+    // 攻撃の 2×2 は右側のままにし、列だけを入れ替える（外側の列＝ジャンプ・弱、内側の列＝守・強）。段（y）と大きさは変えない
+    const ATTACK_COLS = { jump: 'out', light: 'out', guard: 'in', heavy: 'in' };
+    const outX = spots.guard ? spots.guard[0] : 0, inX = spots.jump ? spots.jump[0] : 0;
     for (const k of Object.keys(spots)) {
       const [x, y, w, h] = spots[k];
-      place(pads[k], hand === 'left' ? vw - mR + mL - x - w : x, y, w, h);
+      let nx = x;
+      if (hand === 'left' && ATTACK_COLS[k]) nx = ATTACK_COLS[k] === 'out' ? outX : inX;
+      place(pads[k], nx, y, w, h);
     }
     if (!touchMode || vh >= vw) top.style.display = 'flex';
     if (!(touchMode && vh < vw)) top.querySelector('.name').style.display = '';

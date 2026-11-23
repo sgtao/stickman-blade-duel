@@ -256,6 +256,9 @@ const layOf = (page) => page.evaluate((keys) => {
   return o;
 }, KEYS);
 const mirrorLay = (A, B, w) => KEYS.every(k => Math.abs(B[k].x - (w - A[k].x - A[k].w)) <= 1 && Math.abs(B[k].y - A[k].y) <= 0.5 && Math.abs(B[k].w - A[k].w) <= 0.5);
+// 左利き（SPEC 条件 7）：◀▶ と必殺は動かさない。攻撃の 2×2 は右側のまま、列だけ入れ替える（ジャンプ↔守、弱↔強 の x を入れ替え、段は同じ）
+const flipAttack = (A, B) => { const want = { jump: A.guard.x, guard: A.jump.x, light: A.heavy.x, heavy: A.light.x };
+  return KEYS.every(k => Math.abs(B[k].x - (want[k] !== undefined ? want[k] : A[k].x)) <= 1 && Math.abs(B[k].y - A[k].y) <= 0.5 && Math.abs(B[k].w - A[k].w) <= 0.5); };
 const sameLay = (A, B) => KEYS.every(k => Math.abs(B[k].x - A[k].x) <= 0.5 && Math.abs(B[k].y - A[k].y) <= 0.5);
 const storedHand = (page) => page.evaluate(() => localStorage.getItem('sbd.hand'));
 const handData = (page) => page.evaluate(() => { const b = document.querySelector('#btnHandTitle'); return b ? b.dataset.hand : null; });
@@ -295,7 +298,7 @@ await safeRun('A 利き手（844×390）', async () => {
   check('A タイトル：利き手の切り替えがあり、既定は右（保存なし）', (await handData(page)) === 'right' && !(await storedHand(page)), `data-hand ${await handData(page)}`);
   await page.tap('#btnHandTitle'); await page.waitForTimeout(100);
   check('A タイトル：タップで左に変わり、保存される', (await handData(page)) === 'left' && (await storedHand(page)) === 'left', `data-hand ${await handData(page)}, 保存 ${await storedHand(page)}`);
-  check('A タイトル：左にすると配置も左右反転する', mirrorLay(B, await layOf(page), 844));
+  check('A タイトル：左にすると ◀▶ は動かず、攻撃の列だけ入れ替わる', flipAttack(B, await layOf(page)));
   await page.keyboard.press('ArrowRight'); await page.keyboard.press('Enter'); await page.waitForTimeout(100);
   check('A タイトル：キーボード（→ で選び Enter）で右に戻る', (await storedHand(page)) === 'right', `保存 ${await storedHand(page)}`);
   await page.keyboard.press('Enter'); await page.waitForTimeout(100);
@@ -306,7 +309,7 @@ await safeRun('A 利き手（844×390）', async () => {
   await page.evaluate(() => { window.__game.S.cpu.decide = () => window.Core.emptyInput(); });
   await page.waitForTimeout(300);
   const L1 = await layOf(page);
-  check('A タイトルで選んだ左利きが試合に引き継がれる（配置が反転）', mirrorLay(B, L1, 844), fmt(L1));
+  check('A タイトルで選んだ左利きが試合に引き継がれる（攻撃の列が入れ替わる）', flipAttack(B, L1), fmt(L1));
   check('A 試合中のバーに ⇄ がない', (await page.evaluate(() => document.getElementById('btnHand') === null)));
   await page.tap('#btnPause'); await page.waitForTimeout(150);
   check('A 一時停止の画面に「利き手を変える」がある', (await isOn(page, 'scrPause')) && (await page.evaluate(() => !!document.querySelector('[data-act=hand-ask]'))));
@@ -341,7 +344,7 @@ await safeRun('A 保存できない環境', async () => {
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.goto(URL_ + '?seed=4');
   await page.tap('#btnHandTitle'); await page.waitForTimeout(100);
-  check('A 保存できない環境でも、タイトルの切り替えで配置が反転する', (await handData(page)) === 'left' && mirrorLay(B, await layOf(page), 844), `data-hand ${await handData(page)}`);
+  check('A 保存できない環境でも、タイトルの切り替えで攻撃の列が入れ替わる', (await handData(page)) === 'left' && flipAttack(B, await layOf(page)), `data-hand ${await handData(page)}`);
   check('A 保存できない環境で例外 0 件', errors.length === 0, errors.join(' | '));
   await ctx.close();
 });
