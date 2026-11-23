@@ -138,8 +138,9 @@ for (const [label, w, h] of [['縦 390×844', 390, 844], ['横 844×390', 844, 3
   const onTop = KEYS.filter(k => overlap(rects[k], rects.pause) || overlap(rects[k], rects.mute));
   check('一時停止・消音ボタンとも重ならない', onTop.length === 0 && inView(rects.pause) && inView(rects.mute), onTop.join(','));
   check('試合の画面が画面内に収まり、幅 360 px 以上', inView(rects.canvas) && rects.canvas.w >= 360, JSON.stringify(rects.canvas));
-  // 宇宙の街（1 ラウンド目）の月が、HUD（CPU 名・体力ゲージ・タイマー・ラウンド表示）と右の柱に重ならない
+  // 夜の都会＝宇宙の街（2 ラウンド目）の月が、HUD（CPU 名・体力ゲージ・タイマー・ラウンド表示）と右の柱に重ならない
   const moon = await page.evaluate(() => {
+    window.__game.S.match.round = 2; // 夜の都会（space）は 2 ラウンド目
     const cw = document.querySelector('#game').getBoundingClientRect().width;
     const k = Math.max(1, Math.min(2.1, 760 / cw)); // app.js の hudK と同じ式（論理座標の文字の大きさ）
     const mc = document.createElement('canvas').getContext('2d');
@@ -163,7 +164,7 @@ for (const [label, w, h] of [['縦 390×844', 390, 844], ['横 844×390', 844, 3
     }).map(([n]) => n);
     return { stage: st.stage, moon: m, k, hits };
   });
-  check('宇宙の街（1 ラウンド目）で試合している', moon.stage === 'space', String(moon.stage));
+  check('夜の都会＝宇宙の街（2 ラウンド目）で試合している', moon.stage === 'space', String(moon.stage));
   check('月が HUD と右の柱に重ならない', moon.hits.length === 0, `月 (${moon.moon.x},${moon.moon.y}) k=${moon.k.toFixed(2)} 重なり: ${moon.hits.join(',') || 'なし'}`);
   // タップで操作が入る
   const bad = [];

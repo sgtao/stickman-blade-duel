@@ -32,18 +32,18 @@ await page.keyboard.press('Enter'); await page.waitForTimeout(250); await snap(p
 await page.keyboard.press('Enter');
 await until(page, async () => (await st(page)).match.phase === 'fight');
 await page.evaluate(() => { const g = window.__game; g.S.auto = new window.Core.AI('normal', 3); });
-await page.waitForTimeout(1600); await snap(page, '03_fight_space.png');
-check('1 ラウンド目の背景は宇宙の街', (await st(page)).stage === 'space');
-// 火山（2 ラウンド目）
+await page.waitForTimeout(1600); await snap(page, '03_fight_day.png');
+check('1 ラウンド目の背景は昼の山', (await st(page)).stage === 'day');
+// 夜の都会（宇宙の街の絵。2 ラウンド目）
 await page.evaluate(() => { const g = window.__game; g.S.match.startRound(); });
 await until(page, async () => (await st(page)).match.phase === 'fight');
-await page.waitForTimeout(1500); await snap(page, '04_fight_volcano.png');
-check('2 ラウンド目の背景は火山', (await st(page)).stage === 'volcano');
-// 昼（3 ラウンド目）
+await page.waitForTimeout(1500); await snap(page, '04_fight_space.png');
+check('2 ラウンド目の背景は夜の都会（space）', (await st(page)).stage === 'space');
+// 火山地帯（3 ラウンド目）
 await page.evaluate(() => { const g = window.__game; g.S.match.startRound(); });
 await until(page, async () => (await st(page)).match.phase === 'fight');
-await page.waitForTimeout(1500); await snap(page, '04b_fight_day.png');
-check('3 ラウンド目の背景は昼', (await st(page)).stage === 'day');
+await page.waitForTimeout(1500); await snap(page, '04b_fight_volcano.png');
+check('3 ラウンド目の背景は火山地帯', (await st(page)).stage === 'volcano');
 // C2 見やすさ：背景だけの canvas（棒人間・HUD なし）。棒人間が立つ帯（x は 420±80 と 860±80、y は 400〜600）の画素の中央値の相対輝度（WCAG）と、
 // 体の色（P1 は #f2f6ff、P2 は src/app.js の COLORS[1].body の #ff5a64）、体力ゲージの文字（YOU・CPU）とタイマーの文字（白）との比
 // 文字の箱は drawHUD（src/app.js）と同じ座標・フォントから measureText で求める（決め打ちしない）
@@ -73,7 +73,7 @@ const contrast = await page.evaluate(() => {
     you: ink(f20, 'YOU', 'left', 50, 70),
     cpu: union(['弱い', '普通', '強い'].map(lv => ink(f20, 'CPU（' + lv + '）', 'right', 1230, 70))),
     timer: ink('900 44px system-ui, sans-serif', '88', 'center', 640, 28),
-    round: ink(`700 ${Math.round(13 * k)}px system-ui, sans-serif`, 'ROUND 3', 'center', 640, 90),
+    round: ink(`700 ${Math.round(13 * k)}px system-ui, sans-serif`, 'ROUND 1', 'center', 640, 90),
     gauge: [47, 31, 553, 63], // 体力ゲージの地（drawHUD の bar(50,34,500,26) と bar(730,34,500,26) の外枠 3 px の外側）
   };
   const bgL = (b) => medL(area(b)), bgRGB = (b) => medRGB(area(b));
@@ -284,7 +284,7 @@ async function winShot(name, round, side) {
   const info = await p.evaluate((s) => { const g = window.__game, m = g.S.match; return { stage: m.stage(), state: m.f[s].state, sf: m.f[s].sf }; }, side);
   await p.screenshot({ path: path.join(shots, name) });
   check(`勝者の画像 ${name}：勝者（${side === 0 ? '左' : '右'}）が win で掲げている、背景は ${info.stage}`,
-    won && info.state === 'win' && info.stage === ['space', 'volcano', 'day'][round - 1], JSON.stringify(info));
+    won && info.state === 'win' && info.stage === ['day', 'space', 'volcano'][round - 1], JSON.stringify(info));
   await p.context().close();
 }
 await winShot('win_left_round1.png', 1, 0);
@@ -299,16 +299,16 @@ await winShot('win_right_round3.png', 3, 1);
   await p.evaluate(() => {
     const g = window.__game, m = g.S.match;
     g.S.auto = null; g.S.cpu.decide = () => window.Core.emptyInput();
-    m.round = 3; m.wins = [0, 0];
+    m.round = 1; m.wins = [0, 0];
     m.f[0].state = 'jump'; m.f[0].y = 600 - 200; m.f[0].vy = 0; m.f[0].sf = 0; m.f[0].x = 420;
     m.f[1].state = 'jump'; m.f[1].y = 600 - 200; m.f[1].vy = 0; m.f[1].sf = 0; m.f[1].x = 860;
     g.debug.speed = 0;
   });
   await p.waitForTimeout(200);
-  await p.screenshot({ path: path.join(shots, 'jump_day_round3.png') });
+  await p.screenshot({ path: path.join(shots, 'jump_day_round1.png') });
   await p.context().close();
 }
-// 昼（ラウンド 3）の必殺の稲妻と、当たった瞬間の火花。空・雲の上で見えるかを目で確かめる用の画像（検査の数には入れない）
+// 昼（ラウンド 1）の必殺の稲妻と、当たった瞬間の火花。空・雲の上で見えるかを目で確かめる用の画像（検査の数には入れない）
 {
   const p = await open({ viewport: { width: 1280, height: 764 } });
   await p.keyboard.press('Enter'); await p.waitForTimeout(250); await p.keyboard.press('Enter');
@@ -316,7 +316,7 @@ await winShot('win_right_round3.png', 3, 1);
   await p.evaluate(() => {
     const g = window.__game, m = g.S.match;
     g.S.auto = null; g.S.cpu.decide = () => window.Core.emptyInput();
-    m.round = 3; m.wins = [0, 0]; m.f[0].meter = 100;
+    m.round = 1; m.wins = [0, 0]; m.f[0].meter = 100;
     m.f[0].x = 360; m.f[1].x = 900;
     for (const f of m.f) { f.state = 'idle'; f.sf = 0; f.y = 600; f.vx = 0; f.vy = 0; }
   });

@@ -64,8 +64,8 @@
       this.startRound();
     }
 
-    // ラウンド 1＝宇宙、2＝火山、3＝昼（背景の順）
-    stage() { return ['space', 'volcano', 'day'][Math.min(this.round, 3) - 1]; }
+    // ラウンド 1＝昼の山、2＝夜の都会（絵は 'space'＝宇宙の街）、3＝火山地帯（背景の順）
+    stage() { return ['day', 'space', 'volcano'][Math.min(this.round, 3) - 1]; }
 
     startRound() {
       this.round += 1;

@@ -68,7 +68,7 @@ await page.waitForFunction(() => window.__game.state().match && window.__game.st
 await page.evaluate(() => {
   const g = window.__game, m = g.S.match;
   g.S.auto = null; g.S.cpu.decide = () => window.Core.emptyInput();
-  m.round = 3; m.wins = [0, 0];
+  m.round = 1; m.wins = [0, 0];
   for (const f of m.f) { f.state = 'idle'; f.sf = 0; f.y = 600; f.vx = 0; f.vy = 0; }
   g.debug.speed = 0;
 });
@@ -104,7 +104,7 @@ const plates = await page.evaluate(async () => {
     g.S.level = lv;
     const f20 = `800 ${Math.round(20 * k)}px system-ui, sans-serif`;
     const boxes = { YOU: boxOf(f20, 'YOU', 'left', 50, 70), CPU: boxOf(f20, 'CPU（' + labels[lv] + '）', 'right', 1230, 70),
-      ROUND: boxOf(`700 ${Math.round(13 * k)}px system-ui, sans-serif`, 'ROUND 3', 'center', 640, 90) };
+      ROUND: boxOf(`700 ${Math.round(13 * k)}px system-ui, sans-serif`, 'ROUND 1', 'center', 640, 90) };
     g.S.dayPlates = true; const on = await frame(); g.S.dayPlates = false; const off = await frame(); g.S.dayPlates = true;
     // 文字の淡い画素（off の輝度 150 以上）は除く。残るのは空の画素だけ。除いた画素は NaN にして数えない
     const d = (x, y) => { const i = (Math.round(y) * cv.width + Math.round(x)) * 4;

@@ -292,7 +292,7 @@
   function handleEvents(evs) {
     const m = S.match;
     for (const e of evs) {
-      if (e.type === 'roundStart') { S.announce = { text: 'ROUND ' + e.round, t: 0, dur: 1.3, sub: e.stage === 'space' ? 'NEON ORBIT' : e.stage === 'day' ? 'SUNLIT PLAIN' : 'MAGMA RIFT' }; S.dmgShown = [100, 100]; S.trails = [[], []]; }
+      if (e.type === 'roundStart') { S.announce = { text: 'ROUND ' + e.round, t: 0, dur: 1.3, sub: e.stage === 'space' ? 'NIGHT CITY' : e.stage === 'day' ? 'SUNLIT PLAIN' : 'MAGMA RIFT' }; S.dmgShown = [100, 100]; S.trails = [[], []]; }
       else if (e.type === 'fight') S.announce = { text: 'FIGHT!', t: 0, dur: 0.8 };
       else if (e.type === 'swing') Sfx.play('swing', e);
       else if (e.type === 'superStart') { Sfx.play('charge'); S.flash = 0.35; S.flashColor = e.side === 0 ? '120,220,255' : '255,120,130'; }
@@ -882,13 +882,16 @@
       // 高さは盤面の大きさに合わせて k 倍（スマホで盤面が縮んでも見えるように）。下端は論理 703 以内なので y は動かさない
       const x = i === 0 ? 50 : 930, y = 676, w = 300, gh = 12 * k;
       // 空の部分：背景より明るい塗りと、薄い枠線で輪郭を出す
-      ctx.fillStyle = 'rgba(70,82,130,0.7)'; ctx.fillRect(x - 2, y - 2, w + 4, gh + 4);
+      // 昼は地面が暗めの緑で、明るい塗りでは溶けるため、暗い塗りにして輪郭を出す
+      ctx.fillStyle = dayPlate ? 'rgba(8,14,36,0.85)' : 'rgba(70,82,130,0.7)'; ctx.fillRect(x - 2, y - 2, w + 4, gh + 4);
       ctx.strokeStyle = 'rgba(200,210,255,0.55)'; ctx.lineWidth = 1; ctx.strokeRect(x - 1.5, y - 1.5, w + 3, gh + 3);
       const pulse = full ? 0.75 + 0.25 * Math.sin(now * 0.012) : 1;
       ctx.fillStyle = full ? `rgba(255,212,94,${pulse})` : (i === 0 ? '#3aa6d0' : '#c23a4e');
       if (i === 0) ctx.fillRect(x, y, w * f.meter / 100, gh); else ctx.fillRect(x + w - w * f.meter / 100, y, w * f.meter / 100, gh);
-      ctx.font = `800 ${Math.round(14 * k)}px system-ui, sans-serif`; ctx.textAlign = i === 0 ? 'left' : 'right'; ctx.fillStyle = full ? '#ffd45e' : 'rgba(220,225,255,0.7)';
-      ctx.fillText(full ? 'SUPER READY' : 'SUPER', i === 0 ? x : x + w, y - 6 - 14 * k);
+      const fSup = `800 ${Math.round(14 * k)}px system-ui, sans-serif`, tSup = full ? 'SUPER READY' : 'SUPER', xSup = i === 0 ? x : x + w, ySup = y - 6 - 14 * k;
+      plate(fSup, tSup, i === 0 ? 'left' : 'right', xSup, ySup);
+      ctx.font = fSup; ctx.textAlign = i === 0 ? 'left' : 'right'; ctx.fillStyle = full ? '#ffd45e' : (dayPlate ? 'rgba(235,240,255,0.95)' : 'rgba(220,225,255,0.7)');
+      ctx.fillText(tSup, xSup, ySup);
     }
   }
   function drawAnnounce() {
@@ -907,7 +910,7 @@
   let titleT = 0;
   function render(now) {
     const m = S.match;
-    const stage = m ? m.stage() : (Math.floor(titleT / 6) % 2 ? 'volcano' : 'space');
+    const stage = m ? m.stage() : (Math.floor(titleT / 6) % 2 ? 'volcano' : 'space'); // タイトルは白い文字なので、暗い背景（夜の都会・火山）だけを交代させる（昼は文字が読みにくい）
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     const sx = S.shake ? rand(-S.shake, S.shake) : 0, sy = S.shake ? rand(-S.shake, S.shake) * 0.6 : 0;
     ctx.translate(sx, sy);
