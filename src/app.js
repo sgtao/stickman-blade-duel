@@ -612,15 +612,6 @@
     for (let i = 0; i < 6; i++) { const cw = 90 + r() * 60, cx = r() * W, cy = 200 + r() * 80; x.globalAlpha = 0.5; x.drawImage(DAY.sprites[2], cx - cw / 2, cy - cw * 0.2, cw, cw * 0.4); }
     for (let i = 0; i < 4; i++) { const cw = 150 + r() * 60, cx = r() * W, cy = 170 + r() * 50; x.globalAlpha = 0.8; x.drawImage(DAY.sprites[1], cx - cw / 2, cy - cw * 0.2, cw, cw * 0.4); }
     x.globalAlpha = 1;
-    // HUD の文字の後ろの暗い板（昼だけ）。板は drawHUD と同じ座標・フォント（hudK = 1）の文字の箱に 3 px の余白を足したもの
-    const hudInk = (font, text, align, px, py) => { x.font = font; x.textAlign = align; x.textBaseline = 'top'; const m = x.measureText(text);
-      const l = align === 'right' ? px - m.width : align === 'center' ? px - m.width / 2 : px;
-      return [l, py - m.actualBoundingBoxAscent, l + m.width, py + m.actualBoundingBoxDescent]; };
-    const f20 = '800 20px system-ui, sans-serif';
-    const plates = [hudInk(f20, 'YOU', 'left', 50, 70), hudInk(f20, 'CPU（弱い）', 'right', 1230, 70), hudInk(f20, 'CPU（強い）', 'right', 1230, 70),
-      hudInk('700 13px system-ui, sans-serif', 'ROUND 3', 'center', 640, 90)];
-    x.fillStyle = 'rgba(10,18,44,0.55)';
-    for (const b of plates) x.fillRect(b[0] - 3, b[1] - 3, b[2] - b[0] + 6, b[3] - b[1] + 6);
     return c;
   }
   // 山の層：遠い峰（淡い青紫・雪・明暗）→ 中の山（青緑・霞）→ 手前の山（暗い緑紺・木・尾根の縁）→ 地面。上部は透明
@@ -763,6 +754,9 @@
     ctx.strokeStyle = '#9aa3b8'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(p.hilt[0], p.hilt[1]); ctx.lineTo(p.hand[0], p.hand[1]); ctx.stroke();
     // blade with glow
     if (!ko || f.sf < 40) {
+      // 昼だけ：淡い空や雲に溶けないよう、剣の下に暗い線を引く（通常の合成。残像には足さない）
+      if (day && S.bladeBase !== false) { ctx.save(); ctx.strokeStyle = 'rgba(8,14,36,0.55)'; ctx.lineWidth = 9; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(p.hand[0], p.hand[1]); ctx.lineTo(p.tip[0], p.tip[1]); ctx.stroke(); ctx.restore(); }
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
       const flick = 0.85 + Math.sin(performance.now() * 0.05 + i) * 0.1;
       glowLine([p.hand, p.tip], col.blade, [26, 14, 8], [0.10 * flick, 0.22 * flick, 0.55]);
@@ -780,9 +774,12 @@
 
   function drawBolts() {
     if (!S.bolts.length) return;
+    const day = !!S.match && S.match.stage() === 'day';
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     for (const b of S.bolts) {
       const a = Math.max(0, b.life / b.max);
+      // 昼だけ：淡い空の上で稲妻が溶けないよう、暗い縁を先に通常の合成で引く
+      if (day) { ctx.globalCompositeOperation = 'source-over'; glowLine(b.pts, '8,14,36', [9], [0.5 * a]); ctx.globalCompositeOperation = 'lighter'; }
       glowLine(b.pts, b.color, [22, 10, 4], [0.12 * a, 0.3 * a, 0.75 * a]);
       glowLine(b.pts, '255,255,255', [1.6], [0.95 * a]);
       // branch
@@ -840,10 +837,24 @@
     for (let i = 0; i < 2; i++) { const target = m.f[i].hp; if (S.dmgShown[i] > target) S.dmgShown[i] = Math.max(target, S.dmgShown[i] - 0.6); else S.dmgShown[i] = target; }
     bar(50, 34, 500, 26, a.hp / 100, S.dmgShown[0] / 100, a.hp > 30 ? ['#9af0ff', '#2fa8d8'] : ['#ffd36b', '#e0702a'], false);
     bar(730, 34, 500, 26, b.hp / 100, S.dmgShown[1] / 100, b.hp > 30 ? ['#ff9aa2', '#d02f45'] : ['#ffd36b', '#e0702a'], true);
-    ctx.font = `800 ${Math.round(20 * k)}px system-ui, sans-serif`; ctx.textBaseline = 'top';
-    ctx.fillStyle = '#e8f6ff'; ctx.textAlign = 'left'; ctx.fillText('YOU', 50, 70);
+    // 昼だけ：文字の後ろの暗い板。背景には焼き込まず、描く文字の箱（余白 3 px）を毎回描く（背景の拡大・平行移動の影響を受けない）
+    const dayPlate = m.stage() === 'day' && S.dayPlates !== false;
+    const plate = (font, text, align, px, py) => {
+      if (!dayPlate) return;
+      ctx.font = font; ctx.textAlign = align; ctx.textBaseline = 'top'; const t = ctx.measureText(text);
+      // 文字の実際の墨の範囲（measureText の actualBoundingBox）に 3 px の余白。送り幅で測ると、CJK の字の左右のはみ出しが板から出る
+      ctx.fillStyle = 'rgba(10,18,44,0.55)';
+      const x0 = Math.floor(px - t.actualBoundingBoxLeft), y0 = Math.floor(py - t.actualBoundingBoxAscent);
+      const x1 = Math.ceil(px + t.actualBoundingBoxRight), y1 = Math.ceil(py + t.actualBoundingBoxDescent);
+      ctx.fillRect(x0 - 3, y0 - 3, x1 - x0 + 6, y1 - y0 + 6);
+    };
+    const f20 = `800 ${Math.round(20 * k)}px system-ui, sans-serif`;
     const lv = { weak: '弱い', normal: '普通', strong: '強い' }[S.level];
-    ctx.fillStyle = '#ffd0d4'; ctx.textAlign = 'right'; ctx.fillText('CPU（' + lv + '）', 1230, 70);
+    const cpuText = 'CPU（' + lv + '）';
+    plate(f20, 'YOU', 'left', 50, 70); plate(f20, cpuText, 'right', 1230, 70);
+    ctx.font = f20; ctx.textBaseline = 'top';
+    ctx.fillStyle = '#e8f6ff'; ctx.textAlign = 'left'; ctx.fillText('YOU', 50, 70);
+    ctx.fillStyle = '#ffd0d4'; ctx.textAlign = 'right'; ctx.fillText(cpuText, 1230, 70);
     // round pips
     for (let i = 0; i < 2; i++) {
       for (let k = 0; k < C.WINS_NEEDED; k++) {
@@ -857,7 +868,9 @@
     const sec = Math.ceil(Math.max(0, m.timer) / 60);
     ctx.fillStyle = 'rgba(5,6,16,0.8)'; ctx.fillRect(598, 20, 84, 64); ctx.strokeStyle = 'rgba(200,210,255,0.5)'; ctx.strokeRect(598, 20, 84, 64);
     ctx.fillStyle = sec <= 10 ? '#ffd45e' : '#ffffff'; ctx.textAlign = 'center'; ctx.font = '900 44px system-ui, sans-serif'; ctx.fillText(String(sec), 640, 28);
-    ctx.font = `700 ${Math.round(13 * k)}px system-ui, sans-serif`; ctx.fillStyle = 'rgba(220,225,255,0.8)'; ctx.fillText('ROUND ' + m.round, 640, 90);
+    const fRound = `700 ${Math.round(13 * k)}px system-ui, sans-serif`;
+    plate(fRound, 'ROUND ' + m.round, 'center', 640, 90);
+    ctx.font = fRound; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = 'rgba(220,225,255,0.8)'; ctx.fillText('ROUND ' + m.round, 640, 90);
     // super meters
     for (let i = 0; i < 2; i++) {
       const f = m.f[i], full = f.meter >= C.MAX_METER;

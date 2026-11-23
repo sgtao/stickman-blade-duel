@@ -1,6 +1,7 @@
 // 合格条件（昼の背景 A・B）：(a) 山の稜線がある、(b) 流れる雲は空の帯だけを動かし、帯と HUD は変えない、
 // (c) 手前の山の帯の相対輝度の中央値が 0.065 以下、(d) 昼の平均輝度は参考（visual.mjs が 110 以上を見る）
-import { playwright, URL_, check, done } from './lib.mjs';
+import { playwright, URL_, ROOT, check, done } from './lib.mjs';
+import path from 'path';
 const { chromium } = playwright();
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 764 } });
@@ -83,6 +84,64 @@ const diff = await page.evaluate(() => {
 check('(b) 空の帯（y 150〜330）の画素が 2 秒の間に変わる（雲が流れている）', diff.sky >= 1000, `変わった画素 ${diff.sky}`);
 check('(b) 棒人間の帯（y 400〜600）は変わらない', diff.band === 0, `変わった画素 ${diff.band}`);
 check('(b) HUD の帯（y 0〜90）は変わらない', diff.hud === 0, `変わった画素 ${diff.hud}`);
+// (e) HUD の板（昼だけ）：板は、実際に描く文字の箱（measureText、余白 3 px）を覆う。板の有無（S.dayPlates）だけを変えて、
+// 箱の左右上下 2 px の外側の画素が変わることを見る。強さは 3 種（弱い・普通・強い）。画像は shots/ に出す
+for (const lv of ['weak', 'normal', 'strong']) {
+  await page.evaluate((lv) => { window.__game.S.level = lv; }, lv);
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(ROOT, 'shots', `day_hud_${lv}.png`) });
+}
+const plates = await page.evaluate(async () => {
+  const g = window.__game, cv = document.querySelector('#game'), c2 = cv.getContext('2d');
+  const k = Math.max(1, Math.min(2.1, 760 / cv.getBoundingClientRect().width));
+  const frame = async () => { await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); return c2.getImageData(0, 0, cv.width, cv.height).data.slice(); };
+  const tc = document.createElement('canvas').getContext('2d'); tc.textBaseline = 'top';
+  const boxOf = (font, text, align, px, py) => { tc.font = font; tc.textAlign = align; const m = tc.measureText(text);
+    return [Math.floor(px - m.actualBoundingBoxLeft), Math.floor(py - m.actualBoundingBoxAscent), Math.ceil(px + m.actualBoundingBoxRight), Math.ceil(py + m.actualBoundingBoxDescent)]; };
+  const labels = { weak: '弱い', normal: '普通', strong: '強い' };
+  const out = {};
+  for (const lv of ['weak', 'normal', 'strong']) {
+    g.S.level = lv;
+    const f20 = `800 ${Math.round(20 * k)}px system-ui, sans-serif`;
+    const boxes = { YOU: boxOf(f20, 'YOU', 'left', 50, 70), CPU: boxOf(f20, 'CPU（' + labels[lv] + '）', 'right', 1230, 70),
+      ROUND: boxOf(`700 ${Math.round(13 * k)}px system-ui, sans-serif`, 'ROUND 3', 'center', 640, 90) };
+    g.S.dayPlates = true; const on = await frame(); g.S.dayPlates = false; const off = await frame(); g.S.dayPlates = true;
+    // 文字の淡い画素（off の輝度 150 以上）は除く。残るのは空の画素だけ。除いた画素は NaN にして数えない
+    const d = (x, y) => { const i = (Math.round(y) * cv.width + Math.round(x)) * 4;
+      if (0.2126 * off[i] + 0.7152 * off[i + 1] + 0.0722 * off[i + 2] >= 150) return NaN;
+      return Math.abs(on[i] - off[i]) + Math.abs(on[i + 1] - off[i + 1]) + Math.abs(on[i + 2] - off[i + 2]); };
+    for (const [name, b] of Object.entries(boxes)) {
+      const fr = { L: [], R: [], T: [], B: [] };
+      // 箱は画素の境界（整数）。外側 2 px は、左上は b-1, b-2、右下は b+1, b+2 の画素（b は箱の外側の最初の画素）
+      for (let t = b[1]; t < b[3]; t += 1) { fr.L.push(d(b[0] - 2, t)); fr.R.push(d(b[2] - 1 + 2, t)); }
+      for (let x = b[0]; x < b[2]; x += 1) { fr.T.push(d(x, b[1] - 2)); fr.B.push(d(x, b[3] - 1 + 2)); }
+      const frac = {}; for (const key of Object.keys(fr)) { const ok = fr[key].filter(v => !Number.isNaN(v)); frac[key] = ok.length ? ok.filter(v => v >= 8).length / ok.length : 0; }
+      out[lv + ' ' + name] = { box: b.map(v => Math.round(v * 10) / 10), frac };
+    }
+  }
+  return out;
+});
+for (const [key, v] of Object.entries(plates)) {
+  const minF = Math.min(...Object.values(v.frac));
+  check(`昼の HUD 板（${key}）：箱の左右上下 2 px の外側が板で変わる（画素の 90% 以上）`, minF >= 0.9,
+    `箱 ${v.box} 最小の割合 ${(minF * 100).toFixed(0)}% (L ${(v.frac.L * 100).toFixed(0)} R ${(v.frac.R * 100).toFixed(0)} T ${(v.frac.T * 100).toFixed(0)} B ${(v.frac.B * 100).toFixed(0)})`);
+}
+// (f) 剣の下地（昼だけ）：空の上で跳んだ剣の線の近くの画素が、下地ありのほうが暗い。下地は S.bladeBase で切り替える
+const blade = await page.evaluate(async () => {
+  const g = window.__game, m = g.S.match, cv = document.querySelector('#game'), c2 = cv.getContext('2d');
+  const f = m.f[0]; f.state = 'jump'; f.sf = 0; f.y = 400; f.vx = 0; f.vy = 0;
+  const frame = async () => { await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); return c2.getImageData(0, 0, cv.width, cv.height).data.slice(); };
+  await new Promise(r => setTimeout(r, 100));
+  const p = g.pose(f), dx = p.tip[0] - p.hand[0], dy = p.tip[1] - p.hand[1], L = Math.hypot(dx, dy);
+  const pts = [];
+  for (const t of [0.25, 0.4, 0.55, 0.7]) for (const s of [-3, 3]) pts.push([p.hand[0] + t * dx - dy / L * s, p.hand[1] + t * dy + dx / L * s]);
+  const lum = (d, x, y) => { const i = (Math.round(y) * cv.width + Math.round(x)) * 4; return 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; };
+  g.S.bladeBase = true; const on = await frame(); g.S.bladeBase = false; const off = await frame(); g.S.bladeBase = true;
+  const mean = (d) => pts.reduce((a, [x, y]) => a + lum(d, x, y), 0) / pts.length;
+  return { on: mean(on), off: mean(off), hand: p.hand.map(Math.round), tip: p.tip.map(Math.round) };
+});
+check('昼の剣：下地ありの線の近くの画素が、下地なしより 10 以上暗い（淡い空の上）', blade.off - blade.on >= 10,
+  `下地なし ${blade.off.toFixed(1)} / 下地あり ${blade.on.toFixed(1)}（手元 ${blade.hand} 剣先 ${blade.tip}）`);
 check('コンソールのエラーと例外が 0 件', errors.length === 0, errors.slice(0, 3).join(' | '));
 await browser.close();
 done('day_stage');

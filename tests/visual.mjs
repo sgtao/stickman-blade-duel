@@ -79,16 +79,18 @@ const contrast = await page.evaluate(() => {
   const bgL = (b) => medL(area(b)), bgRGB = (b) => medRGB(area(b));
   const band = medL([...pix(340, 501, 400, 601), ...pix(780, 941, 400, 601)]);
   // ROUND は rgba(220,225,255,0.8) で描く。地の色と alpha で重ねた色で比べる
-  const roundEff = mix([220, 225, 255], 0.8, bgRGB(B.round));
+  // 昼の HUD の板（rgba(10,18,44,0.55)）は描画時に文字の下へ重ねる。文字の実際の地は、背景に板を重ねた色
+  const plated = (b) => mix([10, 18, 44], 0.55, bgRGB(b));
+  const roundEff = mix([220, 225, 255], 0.8, plated(B.round));
   // 体力ゲージは地の上の backplate rgba(5,6,16,0.8) の上に、塗り（全 6 色）を描く
   const gBack = mix([5, 6, 16], 0.8, bgRGB(B.gauge));
   const fills = ['#9af0ff', '#2fa8d8', '#ff9aa2', '#d02f45', '#ffd36b', '#e0702a'];
   const boxes = Object.fromEntries(Object.entries(B).map(([n, b]) => [n, b.map(v => Math.round(v))]));
   return { k, boxes, band,
     p1: ratio(hexL('#f2f6ff'), band), p2: ratio(hexL('#ff5a64'), band),
-    you: ratio(hexL('#e8f6ff'), bgL(B.you)), cpu: ratio(hexL('#ffd0d4'), bgL(B.cpu)),
+    you: ratio(hexL('#e8f6ff'), relL(...plated(B.you))), cpu: ratio(hexL('#ffd0d4'), relL(...plated(B.cpu))),
     timer: Math.min(ratio(hexL('#ffffff'), bgL(B.timer)), ratio(hexL('#ffd45e'), bgL(B.timer))),
-    round: ratio(relL(...roundEff), bgL(B.round)),
+    round: ratio(relL(...roundEff), relL(...plated(B.round))),
     gauge: Math.min(...fills.map(c => ratio(hexL(c), relL(...gBack)))) };
 });
 console.log('  文字の箱（論理 px）k=' + contrast.k.toFixed(2) + ' ' + JSON.stringify(contrast.boxes));
@@ -304,6 +306,34 @@ await winShot('win_right_round3.png', 3, 1);
   });
   await p.waitForTimeout(200);
   await p.screenshot({ path: path.join(shots, 'jump_day_round3.png') });
+  await p.context().close();
+}
+// 昼（ラウンド 3）の必殺の稲妻と、当たった瞬間の火花。空・雲の上で見えるかを目で確かめる用の画像（検査の数には入れない）
+{
+  const p = await open({ viewport: { width: 1280, height: 764 } });
+  await p.keyboard.press('Enter'); await p.waitForTimeout(250); await p.keyboard.press('Enter');
+  await until(p, async () => (await st(p)).match.phase === 'fight');
+  await p.evaluate(() => {
+    const g = window.__game, m = g.S.match;
+    g.S.auto = null; g.S.cpu.decide = () => window.Core.emptyInput();
+    m.round = 3; m.wins = [0, 0]; m.f[0].meter = 100;
+    m.f[0].x = 360; m.f[1].x = 900;
+    for (const f of m.f) { f.state = 'idle'; f.sf = 0; f.y = 600; f.vx = 0; f.vy = 0; }
+  });
+  await p.waitForTimeout(100);
+  const l0 = (await st(p)).sfx.lightning;
+  await p.keyboard.press('KeyL');
+  await until(p, async () => (await st(p)).sfx.lightning > l0, 3000);
+  await p.screenshot({ path: path.join(shots, 'day_super_lightning.png') });
+  await p.evaluate(() => {
+    const g = window.__game, m = g.S.match;
+    m.f[0].meter = 0; m.f[0].x = 560; m.f[1].x = 670; m.f[1].hp = 100;
+    for (const f of m.f) { f.state = 'idle'; f.sf = 0; f.y = 600; f.vx = 0; f.vy = 0; }
+  });
+  await p.waitForTimeout(1200);
+  await p.keyboard.press('KeyK');
+  await until(p, async () => (await st(p)).parts >= 20, 3000);
+  await p.screenshot({ path: path.join(shots, 'day_hit_spark.png') });
   await p.context().close();
 }
 await browser.close();
