@@ -24,15 +24,23 @@ function scripted(seed) { const m = new C.Match({ seed }); const ai = new C.AI('
   return JSON.stringify(m.snapshot()); }
 check('同じ種・同じ入力列なら一致', scripted(7) === scripted(7));
 // 単純な連打の戦略（人が真っ先に試すもの）に、「強い」が負け越さない
+// 人が続けて押せる範囲の連打（SPEC 合格条件 4）：3 回押したら 30 フレーム止め、を繰り返す
 function spamBot(move, every) {
-  return { decide(m, side) { const me = m.f[side], o = m.f[1 - side]; const p = C.emptyInput(); if (m.phase !== 'fight') return p;
+  let presses = 0, rest = 0;
+  return { reset() { presses = 0; rest = 0; }, decide(m, side) { const me = m.f[side], o = m.f[1 - side]; const p = C.emptyInput(); if (m.phase !== 'fight') return p;
     const d = Math.abs(o.x - me.x); if (d > 110) { if (o.x > me.x) p.right = true; else p.left = true; }
-    if (m.frame % every === 0) p[me.meter >= 100 && move === 'mix' ? 'super' : (move === 'mix' ? 'light' : move)] = true; return p; } };
+    if (rest > 0) { rest -= 1; return p; }
+    if (m.frame % every === 0) {
+      p[me.meter >= 100 && move === 'mix' ? 'super' : (move === 'mix' ? 'light' : move)] = true;
+      presses += 1; if (presses >= 3) { presses = 0; rest = 30; }
+    }
+    return p; } };
 }
 function vsBot(bot, level) {
   let w = 0;
   for (let s = 1; s <= 100; s++) {
     const m = new C.Match({ seed: s }); const cpu = new C.AI(level, s * 2 + 2);
+    if (bot.reset) bot.reset();
     for (let i = 0; i < 20000 && m.phase !== 'matchEnd'; i++) m.step([bot.decide(m, 0), cpu.decide(m, 1)]);
     if (m.winner === 1) w++;
   }

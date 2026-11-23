@@ -91,7 +91,7 @@
     constructor(opts) {
       opts = opts || {};
       // 'legacy'：中心間の距離と高さ（旧）。'blade'：剣の形（M14c）。既定は切り替えまで 'legacy'。
-      this.hitModel = opts.hitModel === 'blade' ? 'blade' : 'legacy';
+      this.hitModel = opts.hitModel === 'legacy' ? 'legacy' : 'blade';
       this.seed = (opts.seed == null ? 1 : opts.seed) >>> 0;
       this.rng = mulberry32(this.seed);
       this.round = 0;
@@ -192,7 +192,7 @@
       // Anything else (attack, stun, air, guard button, too far) starts the count again.
       const backDir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
       const back = backDir !== 0 && backDir !== f.facing;
-      const near = Math.abs(o.x - f.x) <= MOVES.light.reach + 80;
+      const near = Math.abs(o.x - f.x) <= 205; // SPEC 条件 3：後退の防御は距離 205 px 以下（間合いの変更に依らない）
       if (back && !airborne(f) && !busy(f) && near && !input.guard) f.backHold += 1; else f.backHold = 0;
 
       if (f.state === 'hitstun' || f.state === 'blockstun') {
@@ -422,7 +422,7 @@
       if ((prevMine === 'blockstun' || prevMine === 'hitstun') && me.state !== 'blockstun' && me.state !== 'hitstun' && !airborne(me)) {
         const realDist = Math.abs(foe.x - me.x);
         const foeBusy = foe.state === 'attack' && foe.move && foe.sf >= MOVES[foe.move].startup;
-        if (foeBusy && realDist <= MOVES.light.reach && r() < this.p.punishP) { this.lastAttack = 'light'; input.light = true; return input; }
+        if (foeBusy && realDist <= bladeReach('light') && r() < this.p.punishP) { this.lastAttack = 'light'; input.light = true; return input; }
         if (realDist < 200 && r() < this.p.guardP) { this.plan = 'guard'; this.planLeft = 8 + Math.floor(r() * 10); input.guard = true; return input; }
       }
 
@@ -437,8 +437,11 @@
       if (busy(me) && me.state !== 'attack') return input;
       if (me.state === 'attack') return input;
 
-      const foeAttacking = seen.state === 'attack';
-      const foeRecovering = foeAttacking && seen.move && seen.sf >= MOVES[seen.move].startup + MOVES[seen.move].active;
+      // 読み：見ている姿勢は反応の遅れ（p.delay フレーム）の分だけ古い。攻撃の進み具合を、遅れの分だけ先へ読む。
+      const predSf = seen.state === 'attack' ? seen.sf + this.p.delay : 0;
+      const foeMove = seen.state === 'attack' && seen.move ? MOVES[seen.move] : null;
+      const foeAttacking = foeMove != null && predSf < foeMove.startup + foeMove.active + foeMove.recovery;
+      const foeRecovering = foeAttacking && predSf >= foeMove.startup + foeMove.active;
       const foeThreat = foeAttacking && !foeRecovering;
       const foeAir = seen.y < GROUND - 40;
       const mistake = r() < this.p.mistake;
@@ -462,12 +465,12 @@
       }
       if (masher && !mistake && r() < this.p.spacing) {
         if (lightMasher) { // fast slashes cannot be whiff-punished on reaction: close in behind the guard, punish after a block
-          if (dist > MOVES.light.reach - 15 && !foeThreat) { walk(toward); this.out = { left: input.left, right: input.right }; return input; }
+          if (dist > bladeReach('light') - 15 && !foeThreat) { walk(toward); this.out = { left: input.left, right: input.right }; return input; }
           this.plan = 'guard'; this.planLeft = 10; input.guard = true; return input;
         }
-        if (foeRecovering && dist < 230) { if (dist <= MOVES.light.reach) return pick('light'); walk(toward); this.out = { left: input.left, right: input.right }; return input; }
-        if (foeThreat && dist <= MOVES.heavy.reach + 10) { this.plan = 'guard'; this.planLeft = 6; input.guard = true; return input; }
-        const keep = MOVES.heavy.reach + 12;
+        if (foeRecovering && dist < 230) { if (dist <= bladeReach('light')) return pick('light'); walk(toward); this.out = { left: input.left, right: input.right }; return input; }
+        if (foeThreat && dist <= bladeReach('heavy') + 10) { this.plan = 'guard'; this.planLeft = 6; input.guard = true; return input; }
+        const keep = bladeReach('heavy') + 12;
         if (dist < keep - 10) walk(-toward); else if (dist > keep + 25) walk(toward);
         this.out = { left: input.left, right: input.right };
         return input;
@@ -479,11 +482,11 @@
         if (r() < this.p.guardP && !mistake) { this.plan = 'guard'; this.planLeft = 10 + Math.floor(r() * 8); input.guard = true; return input; }
       }
       // Punish a whiffed / recovering attack.
-      if (foeRecovering && dist < MOVES.heavy.reach && r() < this.p.punishP && !mistake) return pick(dist < MOVES.light.reach ? (r() < 0.5 ? 'heavy' : 'light') : 'heavy');
+      if (foeRecovering && dist < bladeReach('heavy') && r() < this.p.punishP && !mistake) return pick(dist < bladeReach('light') ? (r() < 0.5 ? 'heavy' : 'light') : 'heavy');
       // Whiff punish: the opponent swung at air and is still recovering — step in, then strike.
-      if (foeRecovering && dist >= MOVES.heavy.reach && dist < 210 && r() < this.p.punishP && !mistake) { this.plan = 'in'; this.planLeft = 4; walk(toward); this.out = { left: input.left, right: input.right }; return input; }
+      if (foeRecovering && dist >= bladeReach('heavy') && dist < 210 && r() < this.p.punishP && !mistake) { this.plan = 'in'; this.planLeft = 4; walk(toward); this.out = { left: input.left, right: input.right }; return input; }
       // Spacing: do not walk into a swing that is already coming out.
-      if (foeAttacking && !foeRecovering && dist >= MOVES.heavy.reach - 10 && dist < MOVES.heavy.reach + 80 && r() < this.p.spacing && !mistake) { this.plan = 'back'; this.planLeft = 6; walk(-toward); return input; }
+      if (foeAttacking && !foeRecovering && dist >= bladeReach('heavy') - 10 && dist < bladeReach('heavy') + 80 && r() < this.p.spacing && !mistake) { this.plan = 'back'; this.planLeft = 6; walk(-toward); return input; }
       // Anti-air.
       if (foeAir && dist < 170 && r() < this.p.antiAirP * 0.5 && !mistake) return pick('light');
 
@@ -505,7 +508,7 @@
       if (dist > ideal + 30) {
         if (choice < 0.08) { input.jump = true; walk(toward); }
         else walk(toward);
-      } else if (dist < MOVES.light.reach - 5) {
+      } else if (dist < bladeReach('light') - 5) {
         if (choice < 0.35 + 0.2 * this.p.spacing) return pick('light');
         if (choice < 0.55) return pick('heavy');
         if (choice < 0.55 + 0.35 * this.p.spacing) { this.plan = 'back'; this.planLeft = 6 + Math.floor(r() * 8); walk(-toward); }
@@ -596,6 +599,13 @@
         else { const k = ease((t - s - a) / m.recovery); handL = [lerp(62, 28, k), lerp(-116, -108, k)]; blade = lerp(-0.05, -1.0, k); lean = lerp(18, 4, k); }
       }
       if (airborne(f) && f.move === 'light') { footA = [-10, -20]; footB = [20, -24]; }
+      // 空中攻撃（M14c の刃の修正）：有効フレームの間、刃は攻撃者の高さの分だけ下へ向け、地上の相手の体に届かせる。
+      // 手は体の前の低い位置（30, −40）。刃の角度は、手から「相手の体のいる高さ」（前 90 px、地面から攻撃者の高さ）へ。
+      if (airborne(f) && (f.move === 'light' || f.move === 'heavy') && t >= s && t < s + a) {
+        const h = Math.max(0, GROUND - f.y);
+        handL = [30, -40];
+        blade = Math.min(1.4, Math.atan2(h, 90));
+      }
     }
     hipY += crouch;
     const hip = g(0, hipY);
@@ -618,7 +628,20 @@
     return out;
   }
 
+  // M14c：CPU の間合い。有効フレームの刃先の最大の前進（px、正面向き・立ちの姿勢から測る）。判定の形から導く。
+  const reachCache = {};
+  function bladeReach(move) {
+    if (reachCache[move] != null) return reachCache[move];
+    const m = MOVES[move];
+    let best = 0;
+    for (let sf = m.startup; sf < m.startup + m.active; sf++) {
+      const p = pose({ x: 0, y: GROUND, facing: 1, side: 0, state: 'attack', move, sf, vy: 0 });
+      best = Math.max(best, p.tip[0]);
+    }
+    return (reachCache[move] = best);
+  }
+
   root.Core = { W, H, GROUND, FPS, ROUND_FRAMES, MAX_HP, MAX_METER, WINS_NEEDED, MAX_ROUNDS, INTRO_FRAMES, ROUND_END_FRAMES,
-    HIT_DY, SUPER_CLEAR,
+    HIT_DY, SUPER_CLEAR, bladeReach,
     MOVES, ACTIONS, AI_LEVELS, mulberry32, emptyInput, Match, AI, simulate, airborne, pose };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
