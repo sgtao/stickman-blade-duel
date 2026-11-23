@@ -12,5 +12,5 @@ if ! git diff --exit-code HEAD -- index.html >/dev/null; then
   exit 1
 fi
 
-echo "== push 前の検査 2/2：全 8 本（性能の検査を含む）"
+echo "== push 前の検査 2/2：全 10 本（性能の検査を含む）"
 NODE_PATH=$(npm root -g) node tests/run_all.mjs

@@ -1,0 +1,19 @@
+{
+ "idle": "6a7d25aba515f015:240",
+ "intro": "6a7d25aba515f015:240",
+ "walk+": "362c0298b7b43b19:320",
+ "walk-": "7694a5e8e364ef76:320",
+ "walk-air-light": "346778644e5364d0:160",
+ "jump-up": "f31c2ffb2631263f:160",
+ "jump-down": "0f3c9d65faa42d4b:160",
+ "guard": "3e4d09e25e908ae6:160",
+ "hitstun": "4cda92ea43a9f434:240",
+ "blockstun": "e9df8bcf1f565bc2:160",
+ "ko": "8da7a2be992ccff8:320",
+ "win": "5cdda62f69c460f3:320",
+ "atk-light": "14916eb90d408a81:160",
+ "atk-heavy": "fc73718834c650be:280",
+ "atk-super": "4599ba5cb683181a:320",
+ "atk-light-air": "f36993a3cd0ff868:160",
+ "atk-heavy-air": "29428932d97a39f7:280"
+}
