@@ -76,22 +76,21 @@ for (const [label, w, h] of [['縦 390×844', 390, 844], ['横 844×390', 844, 3
     check('B2①必殺は ◀▶ の範囲の中、下端が ◀▶ の上端より 8 px 以上上',
       rects.super.x >= spanL - 0.5 && rOf('super') <= spanR + 0.5 && topLR - bOf('super') >= 8 - 0.01,
       `必殺 x ${rects.super.x.toFixed(1)}〜${rOf('super').toFixed(1)}、◀▶ x ${spanL.toFixed(1)}〜${spanR.toFixed(1)}、必殺下端 ${bOf('super').toFixed(1)}、◀▶上端 ${topLR.toFixed(1)}`);
-    check('B2②ジャンプ・守・強の中心の x が ±2 px で揃う',
-      Math.abs(cxOf('jump') - cxOf('guard')) <= 2 && Math.abs(cxOf('guard') - cxOf('heavy')) <= 2,
-      `jump ${cxOf('jump').toFixed(1)} guard ${cxOf('guard').toFixed(1)} heavy ${cxOf('heavy').toFixed(1)}`);
-    check('B2②右端の列は、ジャンプ・守・強（上から）。弱はその左',
-      rOf('jump') >= rOf('light') - 0.5 && rOf('guard') >= rOf('light') - 0.5 && rOf('heavy') >= rOf('light') - 0.5
-      && cyOf('jump') < cyOf('guard') && cyOf('guard') < cyOf('heavy') && rOf('light') <= rects.heavy.x + 0.5,
-      `y: jump ${cyOf('jump').toFixed(1)} guard ${cyOf('guard').toFixed(1)} heavy ${cyOf('heavy').toFixed(1)}, 弱右端 ${rOf('light').toFixed(1)} 強左端 ${rects.heavy.x.toFixed(1)}`);
+    // N1（右側を 2×2 にする）で、旧の「右端の列＝ジャンプ・守・強」の検査を置き換える。新しい配置は下の N1 の検査で確かめる
+    check('B2②（N1）右端の列：守と強の中心の x が ±2 px で揃う',
+      Math.abs(cxOf('guard') - cxOf('heavy')) <= 2, `guard ${cxOf('guard').toFixed(1)} heavy ${cxOf('heavy').toFixed(1)}`);
+    check('B2②（N1）内側の列：ジャンプと弱の中心の x が ±2 px で揃い、守・強より左',
+      Math.abs(cxOf('jump') - cxOf('light')) <= 2 && cxOf('jump') < cxOf('guard'),
+      `jump ${cxOf('jump').toFixed(1)} light ${cxOf('light').toFixed(1)} guard ${cxOf('guard').toFixed(1)}`);
     check('B2②弱の中心の y が強と ±2 px 以内',
       Math.abs(cyOf('light') - cyOf('heavy')) <= 2, `弱 ${cyOf('light').toFixed(1)} 強 ${cyOf('heavy').toFixed(1)}`);
-    check('B2③ジャンプと守、守と強の縦の余白が 12 px 以上',
-      rects.guard.y - bOf('jump') >= 12 - 0.01 && rects.heavy.y - bOf('guard') >= 12 - 0.01,
-      `ジャンプ→守 ${(rects.guard.y - bOf('jump')).toFixed(1)}、守→強 ${(rects.heavy.y - bOf('guard')).toFixed(1)}`);
+    check('B2③（N1）守と強の縦の余白、ジャンプと守の横の間隔が 12 px 以上',
+      rects.heavy.y - bOf('guard') >= 12 - 0.01 && rects.guard.x - rOf('jump') >= 12 - 0.01,
+      `守→強 ${(rects.heavy.y - bOf('guard')).toFixed(1)}、ジャンプ→守 ${(rects.guard.x - rOf('jump')).toFixed(1)}`);
     // 審査の指摘（余白の余裕）：縦の余白は 16 px 以上、縦持ちの ▶ と 弱 の水平の間隔は 24 px 以上
-    check('余裕③ ジャンプと守、守と強の縦の余白が 16 px 以上（3 画面）',
-      rects.guard.y - bOf('jump') >= 16 - 0.01 && rects.heavy.y - bOf('guard') >= 16 - 0.01,
-      `ジャンプ→守 ${(rects.guard.y - bOf('jump')).toFixed(1)}、守→強 ${(rects.heavy.y - bOf('guard')).toFixed(1)}`);
+    check('余裕③（N1）守と強の縦の余白、ジャンプと守の横の間隔が 16 px 以上（3 画面）',
+      rects.heavy.y - bOf('guard') >= 16 - 0.01 && rects.guard.x - rOf('jump') >= 16 - 0.01,
+      `守→強 ${(rects.heavy.y - bOf('guard')).toFixed(1)}、ジャンプ→守 ${(rects.guard.x - rOf('jump')).toFixed(1)}`);
     if (h > w) check('余裕④ 縦持ち：▶ と 弱 の水平の間隔が 24 px 以上',
       rects.light.x - rOf('right') >= 24 - 0.01,
       `▶ 右端 ${rOf('right').toFixed(1)}、弱 左端 ${rects.light.x.toFixed(1)}、間隔 ${(rects.light.x - rOf('right')).toFixed(1)}`);
@@ -233,6 +232,115 @@ for (const [label, w, h] of [['縦 390×844', 390, 844], ['横 844×390', 844, 3
   await touchCase('2 回戦（終わりに攻撃ボタンをタップ）', 2, 'tap');
   await touchCase('3 回戦（攻撃ボタンを押しっぱなし）', 3, 'held');
   await ctx.close();
+}
+// N1・N2（右側の 2×2、⇄ による左右反転、保存）。各画面で右利き（既定）→ ⇄ で左利き → 再読み込みで保存を確かめる
+{
+  const SIZES = [['縦 390×844', 390, 844], ['横 844×390', 844, 390], ['小さい横 667×375', 667, 375]];
+  const cxOf = (b) => b.x + b.w / 2, cyOf = (b) => b.y + b.h / 2;
+  const rOf = (b) => b.x + b.w, bOf = (b) => b.y + b.h;
+  const grab = (page) => page.evaluate((keys) => {
+    const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); const cs = getComputedStyle(el); return { x: b.x, y: b.y, w: b.width, h: b.height, vis: cs.display !== 'none' && cs.visibility !== 'hidden' }; };
+    const o = { canvas: r(document.querySelector('#game')), pause: r(document.querySelector('#btnPause')), mute: r(document.querySelector('#btnMute')), hand: r(document.querySelector('#btnHand')) };
+    for (const k of keys) o[k] = r(document.querySelector(`.pbtn[data-k=${k}]`));
+    return o;
+  }, KEYS);
+  const tryTap = async (page, sel) => { try { await page.tap(sel, { timeout: 2000 }); return true; } catch (_) { return false; } };
+  const startFight = async (page) => {
+    await page.tap('[data-act=start]'); await page.waitForTimeout(100); await page.tap('[data-level=weak]');
+    await page.waitForFunction(() => window.__game.state().match.phase === 'fight', null, { timeout: 5000 });
+    await page.evaluate(() => { window.__game.S.cpu.decide = () => window.Core.emptyInput(); });
+    await page.waitForTimeout(300);
+  };
+  // 共通の検査：表示・画面内・最小サイズ・重なり（⇄ を含む）
+  function fieldChecks(tag, R, w, h) {
+    const inView = (b) => !!b && b.vis && b.x >= 0 && b.y >= 0 && b.x + b.w <= w + 0.5 && b.y + b.h <= h + 0.5;
+    const all = [...KEYS, 'hand'];
+    check(`${tag}：ボタン・⇄ がすべて表示され画面内`, all.every(k => inView(R[k])), all.filter(k => !inView(R[k])).join(','));
+    const small = all.filter(k => !R[k] || R[k].w < 44 || R[k].h < 44);
+    check(`${tag}：ボタン・⇄ はすべて 44×44 px 以上`, small.length === 0, all.map(k => k + ' ' + (R[k] ? Math.round(R[k].w) + 'x' + Math.round(R[k].h) : '無')).join(', '));
+    const list = [...all, 'pause', 'mute'];
+    const pairs = []; for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) if (R[list[i]] && R[list[j]] && overlap(R[list[i]], R[list[j]])) pairs.push(list[i] + '/' + list[j]);
+    check(`${tag}：ボタン同士・⇄・一時停止・消音が重ならない`, pairs.length === 0, pairs.join(' '));
+    const onGame = all.filter(k => R[k] && R.canvas && overlap(R[k], R.canvas));
+    check(`${tag}：ボタン・⇄ が試合の画面と重ならない`, onGame.length === 0, onGame.join(','));
+  }
+  for (const [label, w, h] of SIZES) {
+    console.log('[N1・N2 ' + label + ']');
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+    const page = await ctx.newPage(); const errors = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(URL_ + '?seed=4');
+    await startFight(page);
+    // 右利き（既定）
+    const R0 = await grab(page);
+    check(`N1 右利き（${label}）：内側の列（ジャンプ・弱）が右端の列（守・強）の左`,
+      !!R0.jump && !!R0.light && R0.jump.x < R0.guard.x && R0.light.x < R0.heavy.x,
+      `jump ${R0.jump && R0.jump.x.toFixed(1)} guard ${R0.guard && R0.guard.x.toFixed(1)} light ${R0.light && R0.light.x.toFixed(1)} heavy ${R0.heavy && R0.heavy.x.toFixed(1)}`);
+    check(`N1 右利き（${label}）：ジャンプと守、弱と強の y が揃い、ジャンプが弱より上`,
+      !!R0.jump && Math.abs(R0.jump.y - R0.guard.y) <= 0.5 && Math.abs(R0.light.y - R0.heavy.y) <= 0.5 && R0.jump.y < R0.light.y,
+      `jump ${R0.jump && R0.jump.y.toFixed(1)} guard ${R0.guard && R0.guard.y.toFixed(1)} light ${R0.light && R0.light.y.toFixed(1)} heavy ${R0.heavy && R0.heavy.y.toFixed(1)}`);
+    check(`N2 余白（${label}）：ジャンプ→守（横）が 16 px 以上`, R0.guard.x - rOf(R0.jump) >= 16 - 0.01, `間隔 ${(R0.guard.x - rOf(R0.jump)).toFixed(1)}`);
+    check(`N2 余白（${label}）：守→強（縦）が 16 px 以上`, R0.heavy.y - bOf(R0.guard) >= 16 - 0.01, `間隔 ${(R0.heavy.y - bOf(R0.guard)).toFixed(1)}`);
+    if (h > w) check(`N2 余白（${label}）：縦持ちで ▶ と 弱 の水平の間隔が 24 px 以上`, R0.light.x - rOf(R0.right) >= 24 - 0.01, `間隔 ${(R0.light.x - rOf(R0.right)).toFixed(1)}`);
+    fieldChecks(`N1 右利き（${label}）`, R0, w, h);
+    check(`N2 ⇄ は縦・横の全画面で表示（タッチ端末）（${label}）`, !!R0.hand && R0.hand.vis, JSON.stringify(R0.hand));
+    // 左利きへ切り替え
+    const tapped = await tryTap(page, '#btnHand');
+    const R1 = await grab(page);
+    const mirrorOK = tapped && KEYS.every(k => R0[k] && R1[k] && Math.abs(R1[k].x - (w - R0[k].x - R0[k].w)) <= 1 && Math.abs(R1[k].y - R0[k].y) <= 0.5 && Math.abs(R1[k].w - R0[k].w) <= 0.5);
+    check(`N2 左利き（${label}）：⇄ で全ボタンの x が vw − x − w と一致（±1 px）、y は変わらない`, mirrorOK,
+      KEYS.map(k => k + ' ' + (R0[k] ? R0[k].x.toFixed(0) : '無') + '→' + (R1[k] ? R1[k].x.toFixed(0) : '無')).join(', '));
+    check(`N2 左利き（${label}）：2×2（ジャンプ・弱・守・強）が左側、◀▶と必殺が右側`,
+      ['jump', 'guard', 'light', 'heavy'].every(k => R1[k] && cxOf(R1[k]) < w / 2) && ['left', 'right', 'super'].every(k => R1[k] && cxOf(R1[k]) > w / 2),
+      ['jump', 'guard', 'light', 'heavy', 'left', 'right', 'super'].map(k => k + ' ' + (R1[k] ? cxOf(R1[k]).toFixed(0) : '無')).join(', '));
+    fieldChecks(`N2 左利き（${label}）`, R1, w, h);
+    // 保存と再読み込み（N4）
+    const saved = await page.evaluate(() => localStorage.getItem('sbd.hand'));
+    check(`N4 保存：⇄ で left にした値が localStorage（sbd.hand）に入る（${label}）`, saved === 'left', String(saved));
+    await page.reload(); await startFight(page);
+    const R2 = await grab(page);
+    check(`N4 再読み込み後も左利きのまま（${label}）`, KEYS.every(k => R1[k] && R2[k] && Math.abs(R2[k].x - R1[k].x) <= 1 && Math.abs(R2[k].y - R1[k].y) <= 0.5),
+      KEYS.map(k => k + ' ' + (R2[k] ? R2[k].x.toFixed(0) : '無')).join(', '));
+    // N2 操作：左利きで、位置をタップすると対応する操作が入る（守・ジャンプ・弱・強・左）
+    const bad = [];
+    for (const k of ['jump', 'guard', 'light', 'heavy', 'left']) {
+      if (!R2[k]) { bad.push(k); continue; }
+      const n0 = await page.evaluate(() => window.__game.pressLog.length);
+      await page.touchscreen.tap(cxOf(R2[k]), cyOf(R2[k])); await page.waitForTimeout(250);
+      const log = await page.evaluate(() => window.__game.pressLog.slice(-1)[0]);
+      const n1 = await page.evaluate(() => window.__game.pressLog.length);
+      if (!(n1 === n0 + 1 && log === k)) bad.push(k);
+      await page.waitForTimeout(400);
+    }
+    check(`N2 左利き（${label}）：位置をタップすると対応する操作が入る（守・ジャンプ・弱・強・◀）`, bad.length === 0, bad.join(','));
+    check(`N2 例外 0 件（${label}）`, errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+  // 保存が失敗する環境（setItem が例外）でも、⇄ が例外なく反転する（N5）
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+    await ctx.addInitScript(() => { Storage.prototype.setItem = function () { throw new Error('QuotaExceededError (test)'); }; });
+    const page = await ctx.newPage(); const errors = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(URL_ + '?seed=4');
+    await startFight(page);
+    const R0 = await grab(page);
+    const tapped = await tryTap(page, '#btnHand');
+    const R1 = await grab(page);
+    const ok = tapped && R1.guard && R0.guard && Math.abs(R1.guard.x - (390 - R0.guard.x - R0.guard.w)) <= 1;
+    check('N5 保存できない環境でも ⇄ で反転する', !!ok, `守 ${R0.guard && R0.guard.x.toFixed(1)} → ${R1.guard && R1.guard.x.toFixed(1)}`);
+    check('N5 保存できない環境で例外 0 件', errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+  // PC（タッチなし）では ⇄ を出さない（N2）
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const page = await ctx.newPage();
+    await page.goto(URL_ + '?seed=4');
+    const d = await page.evaluate(() => { const el = document.querySelector('#btnHand'); return el ? getComputedStyle(el).display : 'なし'; });
+    check('N2 PC（タッチなし）では ⇄ を出さない', d === 'none', d);
+    await ctx.close();
+  }
 }
 await browser.close();
 done('mobile');

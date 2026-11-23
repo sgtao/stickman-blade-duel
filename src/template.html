@@ -16,6 +16,7 @@
   #topbar .name b { color: var(--cyan); }
   #topbar .keys { font-size: 12px; color: var(--dim); white-space: nowrap; }
   .tbtn { min-width: 44px; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #2b3260; background: #10142c; color: var(--ink); font-size: 13px; font-weight: 700; cursor: pointer; }
+  #btnHand { height: 44px; }
   .tbtn:focus-visible, .btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
   #game { position: absolute; display: block; background: #000; image-rendering: auto; }
   #ui { position: absolute; pointer-events: none; z-index: 4; }
@@ -76,6 +77,7 @@
   <div class="keys" id="keys">移動 A/D・ジャンプ W・ガード S・弱 J・強 K・必殺 L・一時停止 P・消音 M</div>
   <button class="tbtn" id="btnPause" aria-label="一時停止">II</button>
   <button class="tbtn" id="btnMute" aria-label="消音">音 ON</button>
+  <button class="tbtn tch" id="btnHand" aria-label="左右の持ち手を切り替え" aria-pressed="false">⇄</button>
 </div>
 <canvas id="game" width="1280" height="720"></canvas>
 <div id="ui">

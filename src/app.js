@@ -940,10 +940,17 @@
   const touchMode = params.get('touch') === '1' || (params.get('touch') !== '0' && matchMedia('(hover: none) and (pointer: coarse)').matches);
   document.body.classList.toggle('touch', touchMode);
   function place(el, x, y, w, h) { Object.assign(el.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' }); }
+  function unfix(el) { Object.assign(el.style, { position: '', left: '', top: '', width: '', height: '' }); }
+  // 持ち手：right（既定）か left。⇄ で切り替え、localStorage（sbd.hand）に保存する。保存できない環境では今回だけ有効
+  const HAND_KEY = 'sbd.hand';
+  let hand = 'right';
+  try { if (localStorage.getItem(HAND_KEY) === 'left') hand = 'left'; } catch (_) {}
   function layout() {
     const vw = window.innerWidth, vh = window.innerHeight;
-    const top = $('#topbar'), ui = $('#ui');
+    const top = $('#topbar'), ui = $('#ui'), hb = $('#btnHand');
     const pads = {}; document.querySelectorAll('.pbtn').forEach(b => { pads[b.dataset.k] = b; });
+    unfix(hb); // ⇄ は、縦持ちと PC では topbar の中に置く。横持ちだけ下で盤面の外に出す
+    const spots = {}; const put = (k, x, y, w, h) => { spots[k] = [x, y, w, h]; }; // 右利きの位置を集め、最後に持ち手で折り返す
     let cx, cy, cw, ch;
     let uiBox = null; // 縦持ちのとき、試合以外の画面の枠（topbar の下から画面の下端まで）
     $('#keys').style.display = touchMode || vw < 900 ? 'none' : '';
@@ -960,19 +967,21 @@
       const areaY = cy + ch + 8, areaH = vh - areaY - 8;
       // 幅の式は vw / 5.4（390 で 72 px）。▶ と 弱 の間を 24 px 以上にするため、従来の 5.2（75 px）から縮める
       const s = Math.max(52, Math.min(84, areaH / 3.3, vw / 5.4));
-      // 3 行。右：上からジャンプ・守・強（右端の列）、弱は強の左隣。左：◀▶ を下段、必殺はその上（◀▶ の中央）
+      // 3 行の枠の中央に、2 段（row2・row3）を置く。左：◀▶ を下段、必殺はその上（◀▶ の中央）
       const gap = Math.max(12, s * 0.12); // 横の間隔
       const vgap = Math.max(16, s * 0.12); // 縦の余白（16 px 以上）
       const by = areaY + Math.max(0, (areaH - (s * 3 + vgap * 2)) / 2);
-      const row1 = by, row2 = by + s + vgap, row3 = by + s * 2 + vgap * 2;
-      place(pads.left, 14, row3, s, s);
-      place(pads.right, 14 + s + gap * 2, row3, s, s);
-      place(pads.super, 14 + s / 2 + gap, row2, s, s); // ◀▶ の範囲（14〜14+2s+2gap）の中央
-      const rightX = vw - 14 - s;
-      place(pads.jump, rightX, row1, s, s);
-      place(pads.guard, rightX, row2, s, s);
-      place(pads.heavy, rightX, row3, s, s);
-      place(pads.light, rightX - s - gap * 2, row3, s, s);
+      const row2 = by + s + vgap, row3 = by + s * 2 + vgap * 2;
+      put('left', 14, row3, s, s);
+      put('right', 14 + s + gap * 2, row3, s, s);
+      put('super', 14 + s / 2 + gap, row2, s, s); // ◀▶ の範囲（14〜14+2s+2gap）の中央
+      // 右側は 2×2（N1）：右端の列＝守（上）・強（下）、内側の列＝ジャンプ（上）・弱（下）。横の間隔は 16 px 以上
+      const hgap = Math.max(16, s * 0.12);
+      const rightX = vw - 14 - s, innerX = rightX - s - hgap;
+      put('guard', rightX, row2, s, s);
+      put('heavy', rightX, row3, s, s);
+      put('jump', innerX, row2, s, s);
+      put('light', innerX, row3, s, s);
     } else {
       // Landscape: side panels hold the pad; the game sits in the middle.
       const s = Math.max(48, Math.min(64, vh / 6.6));
@@ -984,20 +993,31 @@
       place(top, cx, 0, cw, Math.max(0, cy));
       top.style.display = cy >= 40 ? 'flex' : 'none';
       const bottom = vh - 12;
-      // 3 行。左：◀▶ を下段、必殺はその上（◀▶ の中央）。右：右端の列がジャンプ・守・強（上から）、弱は強の左隣
+      // 2 段（row2・row3）を下寄せ。左：◀▶ を下段、必殺はその上（◀▶ の中央）
       const row3 = bottom - s, row2 = row3 - s - vgap, row1 = row2 - s - vgap;
-      place(pads.left, 10, row3, s, s);
-      place(pads.right, 10 + s + gap, row3, s, s);
-      place(pads.super, 10 + s / 2 + gap / 2, row2, s, s); // ◀▶ の範囲（10〜10+2s+gap）の中央
-      const rightX = vw - 10 - s;
-      place(pads.jump, rightX, row1, s, s);
-      place(pads.guard, rightX, row2, s, s);
-      place(pads.heavy, rightX, row3, s, s);
-      place(pads.light, rightX - s - gap, row3, s, s);
+      put('left', 10, row3, s, s);
+      put('right', 10 + s + gap, row3, s, s);
+      put('super', 10 + s / 2 + gap / 2, row2, s, s); // ◀▶ の範囲（10〜10+2s+gap）の中央
+      // 右側は 2×2（N1）：右端の列＝守（上）・強（下）、内側の列＝ジャンプ（上）・弱（下）
+      const hgap = Math.max(16, s * 0.12);
+      const rightX = vw - 10 - s, innerX = rightX - s - hgap;
+      put('guard', rightX, row2, s, s);
+      put('heavy', rightX, row3, s, s);
+      put('jump', innerX, row2, s, s);
+      put('light', innerX, row3, s, s);
+      // ⇄ は、盤面の上のバーが 44 px に足りないため（844×390 では 40 px）、右端の列の最上段（空き）に置く
+      put('hand', rightX, row1, 44, 44);
       // put pause / mute into the left panel when the bar is hidden
       if (cy < 40) {
         top.style.display = 'flex'; place(top, 4, 6, side - 8, 40); top.querySelector('.name').style.display = 'none';
       } else top.querySelector('.name').style.display = '';
+    }
+    // 左利き：全ボタンの x を画面の中央で折り返す（x' = vw − x − 幅）。段（y）・大きさ・操作（data-k）は変えない
+    for (const k of Object.keys(spots)) {
+      const [x, y, w, h] = spots[k];
+      const el = k === 'hand' ? hb : pads[k];
+      if (k === 'hand') hb.style.position = 'fixed'; // 画面の座標で置く（topbar の中に入れない）
+      place(el, hand === 'left' ? vw - x - w : x, y, w, h);
     }
     if (!touchMode || vh >= vw) top.style.display = 'flex';
     if (!(touchMode && vh < vw)) top.querySelector('.name').style.display = '';
@@ -1008,6 +1028,15 @@
   }
   window.addEventListener('resize', layout);
   window.addEventListener('orientationchange', () => setTimeout(layout, 120));
+  // ⇄：持ち手を切り替えて保存し、配置を組み直す
+  function setHand(h) {
+    hand = h;
+    try { localStorage.setItem(HAND_KEY, h); } catch (_) {} // 保存できない環境では、今回だけ有効
+    $('#btnHand').setAttribute('aria-pressed', String(h === 'left'));
+    layout();
+  }
+  $('#btnHand').setAttribute('aria-pressed', String(hand === 'left'));
+  $('#btnHand').addEventListener('click', (e) => { setHand(hand === 'left' ? 'right' : 'left'); e.currentTarget.blur(); });
 
   // ---------- Main loop ----------
   let last = performance.now(), acc = 0;
