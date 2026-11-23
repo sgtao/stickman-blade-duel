@@ -164,6 +164,7 @@
       const b = screenButtons().find(x => x.classList.contains('sel')); if (b) b.click(); e.preventDefault();
     } else if (S.screen === 'select' && /^Digit[123]$/.test(e.code)) {
       const lv = ['weak', 'normal', 'strong'][Number(e.code.slice(5)) - 1]; chooseLevel(lv);
+    } else if (S.screen === 'handconfirm' && e.code === 'Escape') { show('pause'); e.preventDefault(); // 確認の枠の Esc は「いいえ」
     } else if (S.screen === 'pause' && (e.code === 'KeyP' || e.code === 'Escape')) pause(false);
   });
   window.addEventListener('keyup', (e) => { const a = keyMap[e.code]; if (a) held.keys[a] = false; });
@@ -184,7 +185,7 @@
   // ---------- Screens ----------
   function show(name) {
     S.screen = name;
-    const map = { title: 'scrTitle', select: 'scrSelect', pause: 'scrPause', result: 'scrResult' };
+    const map = { title: 'scrTitle', select: 'scrSelect', pause: 'scrPause', handconfirm: 'scrHandConfirm', result: 'scrResult' };
     document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === map[name]));
     $('#btnPause').style.visibility = name === 'fight' ? 'visible' : 'hidden';
     document.body.classList.toggle('fighting', name === 'fight');
@@ -198,6 +199,10 @@
     else if (a === 'title') { S.match = null; show('title'); }
     else if (a === 'again') startMatch(S.level);
     else if (a === 'select') show('select');
+    else if (a === 'hand') setHand(hand === 'left' ? 'right' : 'left'); // タイトル：確認なしで切り替えて保存
+    else if (a === 'hand-ask') openHandConfirm(); // 一時停止：確認を出す
+    else if (a === 'hand-yes') { setHand(hand === 'left' ? 'right' : 'left'); show('pause'); }
+    else if (a === 'hand-no') show('pause');
   }));
   function chooseLevel(lv) {
     S.level = lv;
@@ -926,7 +931,7 @@
       const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.9); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, `rgba(0,0,20,${0.55 * (1 - S.timeScale)})`);
       ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
     }
-    if (m && (S.screen === 'fight' || S.screen === 'pause')) { drawHUD(now); drawAnnounce(); }
+    if (m && (S.screen === 'fight' || S.screen === 'pause' || S.screen === 'handconfirm')) { drawHUD(now); drawAnnounce(); }
   }
   // Title screen backdrop: two fighters posing with blades.
   const demoF = [Object.assign({}, { side: 0, x: 430, y: GROUND, vx: 0, vy: 0, facing: 1, state: 'idle', sf: 0, move: null }), { side: 1, x: 850, y: GROUND, vx: 0, vy: 0, facing: -1, state: 'idle', sf: 0, move: null }];
@@ -941,17 +946,21 @@
   document.body.classList.toggle('touch', touchMode);
   function place(el, x, y, w, h) { Object.assign(el.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' }); }
   function unfix(el) { Object.assign(el.style, { position: '', left: '', top: '', width: '', height: '' }); }
-  // 持ち手：right（既定）か left。⇄ で切り替え、localStorage（sbd.hand）に保存する。保存できない環境では今回だけ有効
+  // 持ち手：right（既定）か left。タイトルで選び、一時停止の確認で変える。localStorage（sbd.hand）に保存する。保存できない環境では今回だけ有効
   const HAND_KEY = 'sbd.hand';
   let hand = 'right';
   try { if (localStorage.getItem(HAND_KEY) === 'left') hand = 'left'; } catch (_) {}
+  const BOARD_GAP = 8; // 横持ち：盤面の端と、いちばん近いボタンの間隔（CSS px、8 以上）
+  // 安全領域の余白：template の #safe（CSS の env() を max() で包んだ値）の位置を読む。上は 0、左右下は 10 以上
+  function safeM() { const r = $('#safe').getBoundingClientRect(); return { l: r.left, r: window.innerWidth - r.right, t: r.top, b: window.innerHeight - r.bottom }; }
   function layout() {
     const vw = window.innerWidth, vh = window.innerHeight;
-    const top = $('#topbar'), ui = $('#ui'), hb = $('#btnHand');
+    const top = $('#topbar'), ui = $('#ui');
     const pads = {}; document.querySelectorAll('.pbtn').forEach(b => { pads[b.dataset.k] = b; });
-    unfix(hb); // ⇄ は、縦持ちと PC では topbar の中に置く。横持ちだけ下で盤面の外に出す
+    const sa = safeM();
     const spots = {}; const put = (k, x, y, w, h) => { spots[k] = [x, y, w, h]; }; // 右利きの位置を集め、最後に持ち手で折り返す
     let cx, cy, cw, ch;
+    let mL = sa.l, mR = sa.r; // 折り返すときの基準の左右の余白（縦持ちでは下の pl・pr を使う）
     let uiBox = null; // 縦持ちのとき、試合以外の画面の枠（topbar の下から画面の下端まで）
     $('#keys').style.display = touchMode || vw < 900 ? 'none' : '';
     if (!touchMode) {
@@ -959,25 +968,29 @@
       cw = Math.min(vw, (vh - tb) * 16 / 9); ch = cw * 9 / 16; cx = (vw - cw) / 2; cy = tb + (vh - tb - ch) / 2;
       place(top, cx, Math.max(0, cy - tb), cw, tb);
     } else if (vh >= vw) {
-      // Portrait: bar, game, then the pad below.
+      // Portrait: bar, game, then the pad below. 上の安全領域の下にバーを置く
       const tb = 48;
-      cw = vw; ch = cw * 9 / 16; cx = 0; cy = tb;
-      place(top, 0, 0, vw, tb);
-      uiBox = [0, tb, vw, vh - tb];
-      const areaY = cy + ch + 8, areaH = vh - areaY - 8;
+      cw = vw; ch = cw * 9 / 16; cx = 0; cy = sa.t + tb;
+      place(top, 0, sa.t, vw, tb);
+      uiBox = [0, cy, vw, vh - cy];
+      const pl = Math.max(14, sa.l), pr = Math.max(14, sa.r); // 左右の余白：従来の 14 px を下限にし、安全領域がそれより広ければその値
+      mL = pl; mR = pr;
+      const areaY = cy + ch + 8, areaH = vh - areaY - Math.max(8, sa.b);
       // 幅の式は vw / 5.4（390 で 72 px）。▶ と 弱 の間を 24 px 以上にするため、従来の 5.2（75 px）から縮める
-      const s = Math.max(52, Math.min(84, areaH / 3.3, vw / 5.4));
+      let s = Math.max(52, Math.min(84, areaH / 3.3, vw / 5.4));
+      // 安全領域が従来の 14 px より広いときだけ、▶ と 弱 の間（24 px）が保たれる大きさまで縮める（既定の大きさは変えない）
+      if (pl + pr > 28) s = Math.max(30, Math.min(s, (vw - pl - pr - 64) / 4));
       // 3 行の枠の中央に、2 段（row2・row3）を置く。左：◀▶ を下段、必殺はその上（◀▶ の中央）
       const gap = Math.max(12, s * 0.12); // 横の間隔
       const vgap = Math.max(16, s * 0.12); // 縦の余白（16 px 以上）
       const by = areaY + Math.max(0, (areaH - (s * 3 + vgap * 2)) / 2);
       const row2 = by + s + vgap, row3 = by + s * 2 + vgap * 2;
-      put('left', 14, row3, s, s);
-      put('right', 14 + s + gap * 2, row3, s, s);
-      put('super', 14 + s / 2 + gap, row2, s, s); // ◀▶ の範囲（14〜14+2s+2gap）の中央
+      put('left', pl, row3, s, s);
+      put('right', pl + s + gap * 2, row3, s, s);
+      put('super', pl + s / 2 + gap, row2, s, s); // ◀▶ の範囲（pl〜pl+2s+2gap）の中央
       // 右側は 2×2（N1）：右端の列＝守（上）・強（下）、内側の列＝ジャンプ（上）・弱（下）。横の間隔は 16 px 以上
       const hgap = Math.max(16, s * 0.12);
-      const rightX = vw - 14 - s, innerX = rightX - s - hgap;
+      const rightX = vw - pr - s, innerX = rightX - s - hgap;
       put('guard', rightX, row2, s, s);
       put('heavy', rightX, row3, s, s);
       put('jump', innerX, row2, s, s);
@@ -987,37 +1000,36 @@
       const s = Math.max(48, Math.min(64, vh / 6.6));
       const gap = Math.max(12, s * 0.12); // 横の間隔
       const vgap = Math.max(16, s * 0.12); // 縦の余白（16 px 以上）
-      // 側の幅は従来の式のまま（試合の画面の大きさを変えない）
-      const side = s * 2 + s * 0.12 * 2 + 14;
-      cw = Math.min(vw - side * 2, vh * 16 / 9); ch = cw * 9 / 16; cx = (vw - cw) / 2; cy = (vh - ch) / 2;
+      const hgap = Math.max(16, s * 0.12); // 右側の 2×2 の内側の間隔
+      // 左右の板は同じ幅 P（2 段ぶんのボタン）にし、盤面の両側に BOARD_GAP 以上の隙間を取る。
+      // 板を同じ幅にするので、左利きに折り返しても隙間は変わらない
+      const P = s * 2 + hgap;
+      cw = Math.min(vw - sa.l - sa.r - 2 * (P + BOARD_GAP), vh * 16 / 9); ch = cw * 9 / 16;
+      cx = Math.max(sa.l + P + BOARD_GAP, Math.min((vw - cw) / 2, vw - sa.r - P - BOARD_GAP - cw));
+      cy = (vh - ch) / 2;
       place(top, cx, 0, cw, Math.max(0, cy));
       top.style.display = cy >= 40 ? 'flex' : 'none';
-      const bottom = vh - 12;
+      const bottom = vh - Math.max(12, sa.b);
       // 2 段（row2・row3）を下寄せ。左：◀▶ を下段、必殺はその上（◀▶ の中央）
-      const row3 = bottom - s, row2 = row3 - s - vgap, row1 = row2 - s - vgap;
-      put('left', 10, row3, s, s);
-      put('right', 10 + s + gap, row3, s, s);
-      put('super', 10 + s / 2 + gap / 2, row2, s, s); // ◀▶ の範囲（10〜10+2s+gap）の中央
+      const row3 = bottom - s, row2 = row3 - s - vgap;
+      put('left', sa.l, row3, s, s);
+      put('right', sa.l + s + gap, row3, s, s);
+      put('super', sa.l + s / 2 + gap / 2, row2, s, s); // ◀▶ の範囲（sa.l〜sa.l+2s+gap）の中央
       // 右側は 2×2（N1）：右端の列＝守（上）・強（下）、内側の列＝ジャンプ（上）・弱（下）
-      const hgap = Math.max(16, s * 0.12);
-      const rightX = vw - 10 - s, innerX = rightX - s - hgap;
+      const rightX = vw - sa.r - s, innerX = rightX - s - hgap;
       put('guard', rightX, row2, s, s);
       put('heavy', rightX, row3, s, s);
       put('jump', innerX, row2, s, s);
       put('light', innerX, row3, s, s);
-      // ⇄ は、盤面の上のバーが 44 px に足りないため（844×390 では 40 px）、右端の列の最上段（空き）に置く
-      put('hand', rightX, row1, 44, 44);
-      // put pause / mute into the left panel when the bar is hidden
+      // ⇄ は置かない（ゲーム中に変えると誤操作しやすいため。利き手はタイトルと一時停止から変える）
       if (cy < 40) {
-        top.style.display = 'flex'; place(top, 4, 6, side - 8, 40); top.querySelector('.name').style.display = 'none';
+        top.style.display = 'flex'; place(top, sa.l, 6, Math.max(0, cx - BOARD_GAP - sa.l), 40); top.querySelector('.name').style.display = 'none';
       } else top.querySelector('.name').style.display = '';
     }
-    // 左利き：全ボタンの x を画面の中央で折り返す（x' = vw − x − 幅）。段（y）・大きさ・操作（data-k）は変えない
+    // 左利き：全ボタンの x を、安全領域の中で左右に折り返す（x' = vw − mR + mL − x − 幅）。段（y）・大きさ・操作（data-k）は変えない
     for (const k of Object.keys(spots)) {
       const [x, y, w, h] = spots[k];
-      const el = k === 'hand' ? hb : pads[k];
-      if (k === 'hand') hb.style.position = 'fixed'; // 画面の座標で置く（topbar の中に入れない）
-      place(el, hand === 'left' ? vw - x - w : x, y, w, h);
+      place(pads[k], hand === 'left' ? vw - mR + mL - x - w : x, y, w, h);
     }
     if (!touchMode || vh >= vw) top.style.display = 'flex';
     if (!(touchMode && vh < vw)) top.querySelector('.name').style.display = '';
@@ -1028,15 +1040,26 @@
   }
   window.addEventListener('resize', layout);
   window.addEventListener('orientationchange', () => setTimeout(layout, 120));
-  // ⇄：持ち手を切り替えて保存し、配置を組み直す
+  // 利き手を切り替えて保存し、表示と配置を組み直す（タイトルのボタン・一時停止の確認から呼ぶ）
   function setHand(h) {
     hand = h;
     try { localStorage.setItem(HAND_KEY, h); } catch (_) {} // 保存できない環境では、今回だけ有効
-    $('#btnHand').setAttribute('aria-pressed', String(h === 'left'));
+    refreshHand();
     layout();
   }
-  $('#btnHand').setAttribute('aria-pressed', String(hand === 'left'));
-  $('#btnHand').addEventListener('click', (e) => { setHand(hand === 'left' ? 'right' : 'left'); e.currentTarget.blur(); });
+  function refreshHand() {
+    const b = $('#btnHandTitle');
+    b.dataset.hand = hand;
+    b.querySelectorAll('[data-h]').forEach(s => { s.className = s.dataset.h === hand ? 'cur' : 'off'; });
+    $('#hcText').textContent = '配置を' + (hand === 'left' ? '右' : '左') + '利きに変えますか？';
+  }
+  // 一時停止の確認を開く。既定の選択は「いいえ」（誤って変えないため）
+  function openHandConfirm() {
+    refreshHand();
+    document.querySelectorAll('#scrHandConfirm .btn').forEach(x => x.classList.toggle('sel', x.dataset.act === 'hand-no'));
+    show('handconfirm');
+  }
+  refreshHand();
 
   // ---------- Main loop ----------
   let last = performance.now(), acc = 0;
@@ -1052,7 +1075,7 @@
       if (n >= maxN) acc = 0;
       if (S.resultDelay > 0) { S.resultDelay -= dt; if (S.resultDelay <= 0) { S.resultDelay = -1; showResult(); } }
     } else acc = 0;
-    if (S.screen !== 'pause') updateFx(dt * S.timeScale);
+    if (S.screen !== 'pause' && S.screen !== 'handconfirm') updateFx(dt * S.timeScale);
     const sup = document.querySelector('.pbtn.sup');
     if (sup) { // 必殺の表示：ゲージ 100 未満は off（灰色）、100 で ready（金色）。押せなくても、ポインタのイベントは受ける
       const ready = !!S.match && S.match.f[0].meter >= C.MAX_METER;

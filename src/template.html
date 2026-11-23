@@ -16,7 +16,14 @@
   #topbar .name b { color: var(--cyan); }
   #topbar .keys { font-size: 12px; color: var(--dim); white-space: nowrap; }
   .tbtn { min-width: 44px; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid #2b3260; background: #10142c; color: var(--ink); font-size: 13px; font-weight: 700; cursor: pointer; }
-  #btnHand { height: 44px; }
+  /* 安全領域（切り欠き）。app.js の layout はこの probe の位置を読み、ボタンと盤面の余白に使う（最低値は 10 px、上は 0） */
+  :root { --sal: max(10px, env(safe-area-inset-left, 0px)); --sar: max(10px, env(safe-area-inset-right, 0px));
+    --sat: max(0px, env(safe-area-inset-top, 0px)); --sab: max(0px, env(safe-area-inset-bottom, 0px)); }
+  #safe { position: fixed; left: var(--sal); right: var(--sar); top: var(--sat); bottom: var(--sab); visibility: hidden; pointer-events: none; }
+  .hv .cur { color: var(--cyan); font-weight: 900; text-shadow: 0 0 10px rgba(94,231,255,.7); }
+  .hv .off { color: var(--dim); font-weight: 600; }
+  /* 利き手の確認の枠は、試合の絵の上でも文字が読めるよう背景を濃くする */
+  #scrHandConfirm { background: rgba(3,4,12,.9); }
   .tbtn:focus-visible, .btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
   #game { position: absolute; display: block; background: #000; image-rendering: auto; }
   #ui { position: absolute; pointer-events: none; z-index: 4; }
@@ -77,14 +84,13 @@
   <div class="keys" id="keys">移動 A/D・ジャンプ W・ガード S・弱 J・強 K・必殺 L・一時停止 P・消音 M</div>
   <button class="tbtn" id="btnPause" aria-label="一時停止">II</button>
   <button class="tbtn" id="btnMute" aria-label="消音">音 ON</button>
-  <button class="tbtn tch" id="btnHand" aria-label="左右の持ち手を切り替え" aria-pressed="false">⇄</button>
 </div>
 <canvas id="game" width="1280" height="720"></canvas>
 <div id="ui">
   <section class="screen on" id="scrTitle">
     <h1>STICKMAN<br><span>BLADE</span> DUEL</h1>
     <p>光る剣の棒人間で、CPU と 1 対 1。2 本先取で勝ち。</p>
-    <div class="row"><button class="btn sel" data-act="start">スタート<small class="kbd">Enter</small></button></div>
+    <div class="row"><button class="btn sel" data-act="start">スタート<small class="kbd">Enter</small></button><button class="btn" id="btnHandTitle" data-act="hand" data-hand="right" aria-label="利き手を切り替える">利き手：<span class="hv"><span class="cur" data-h="right">右</span> ／ <span class="off" data-h="left">左</span></span></button></div>
     <p class="help kbd"><span class="nb"><b>A/D</b> 移動</span>　<span class="nb"><b>W</b> ジャンプ</span>　<span class="nb"><b>S</b> 押し続けてガード</span>　<span class="nb"><b>J</b> 弱</span>　<span class="nb"><b>K</b> 強</span>　<span class="nb"><b>L</b> 必殺（ゲージ満タン）</span>　<span class="nb"><b>P</b> 一時停止</span>　<span class="nb"><b>M</b> 消音</span></p>
     <p class="help tch"><span class="nb"><b>◀▶</b> 移動</span>　<span class="nb"><b>▲</b> ジャンプ</span>　<span class="nb"><b>守</b> 押し続けてガード</span>　<span class="nb"><b>弱・強</b> 攻撃</span>　<span class="nb"><b>必殺</b> ゲージ満タンで稲妻（跳んでかわせる）</span></p>
   </section>
@@ -102,7 +108,15 @@
     <h2>一時停止</h2>
     <div class="row">
       <button class="btn sel" data-act="resume">再開</button>
+      <button class="btn" data-act="hand-ask">利き手を変える</button>
       <button class="btn" data-act="title">タイトルへ</button>
+    </div>
+  </section>
+  <section class="screen" id="scrHandConfirm" role="dialog" aria-modal="true" aria-labelledby="hcText">
+    <h2 id="hcText">配置を左利きに変えますか？</h2>
+    <div class="row">
+      <button class="btn sel" data-act="hand-no">いいえ<small class="kbd">Esc</small></button>
+      <button class="btn" data-act="hand-yes">はい</button>
     </div>
   </section>
   <section class="screen" id="scrResult">
@@ -114,6 +128,7 @@
     </div>
   </section>
 </div>
+<div id="safe" aria-hidden="true"></div>
 <div id="pad">
   <button class="pbtn" data-k="left" aria-label="左">◀</button>
   <button class="pbtn" data-k="right" aria-label="右">▶</button>
