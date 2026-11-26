@@ -256,9 +256,11 @@ const layOf = (page) => page.evaluate((keys) => {
   return o;
 }, KEYS);
 const mirrorLay = (A, B, w) => KEYS.every(k => Math.abs(B[k].x - (w - A[k].x - A[k].w)) <= 1 && Math.abs(B[k].y - A[k].y) <= 0.5 && Math.abs(B[k].w - A[k].w) <= 0.5);
-// 左利き（SPEC 条件 7）：◀▶ と必殺は動かさない。攻撃の 2×2 は右側のまま、列だけ入れ替える（ジャンプ↔守、弱↔強 の x を入れ替え、段は同じ）
-const flipAttack = (A, B) => { const want = { jump: A.guard.x, guard: A.jump.x, light: A.heavy.x, heavy: A.light.x };
-  return KEYS.every(k => Math.abs(B[k].x - (want[k] !== undefined ? want[k] : A[k].x)) <= 1 && Math.abs(B[k].y - A[k].y) <= 0.5 && Math.abs(B[k].w - A[k].w) <= 0.5); };
+// 左利き（SPEC 条件 7）：左に攻撃の 2×2（左の列＝守・強、右の列＝ジャンプ・弱）、右に ◀ ▶ と必殺。
+// 右利きの配置 A を基に、2×2 の塊を左端へ、◀ ▶ と必殺の塊を右端へ移す（段と大きさは同じ）
+const leftSwap = (A, B) => { const dxL = A.left.x - A.jump.x, dxR = (A.guard.x + A.guard.w) - (A.right.x + A.right.w);
+  const want = { guard: A.jump.x + dxL, heavy: A.light.x + dxL, jump: A.guard.x + dxL, light: A.heavy.x + dxL, left: A.left.x + dxR, right: A.right.x + dxR, super: A.super.x + dxR };
+  return KEYS.every(k => Math.abs(B[k].x - want[k]) <= 1 && Math.abs(B[k].y - A[k].y) <= 0.5 && Math.abs(B[k].w - A[k].w) <= 0.5); };
 const sameLay = (A, B) => KEYS.every(k => Math.abs(B[k].x - A[k].x) <= 0.5 && Math.abs(B[k].y - A[k].y) <= 0.5);
 const storedHand = (page) => page.evaluate(() => localStorage.getItem('sbd.hand'));
 const handData = (page) => page.evaluate(() => { const b = document.querySelector('#btnHandTitle'); return b ? b.dataset.hand : null; });
@@ -298,7 +300,7 @@ await safeRun('A 利き手（844×390）', async () => {
   check('A タイトル：利き手の切り替えがあり、既定は右（保存なし）', (await handData(page)) === 'right' && !(await storedHand(page)), `data-hand ${await handData(page)}`);
   await page.tap('#btnHandTitle'); await page.waitForTimeout(100);
   check('A タイトル：タップで左に変わり、保存される', (await handData(page)) === 'left' && (await storedHand(page)) === 'left', `data-hand ${await handData(page)}, 保存 ${await storedHand(page)}`);
-  check('A タイトル：左にすると ◀▶ は動かず、攻撃の列だけ入れ替わる', flipAttack(B, await layOf(page)));
+  check('A タイトル：左にすると、攻撃の 2×2 が左へ、◀ ▶ と必殺が右へ移る', leftSwap(B, await layOf(page)));
   await page.keyboard.press('ArrowRight'); await page.keyboard.press('Enter'); await page.waitForTimeout(100);
   check('A タイトル：キーボード（→ で選び Enter）で右に戻る', (await storedHand(page)) === 'right', `保存 ${await storedHand(page)}`);
   await page.keyboard.press('Enter'); await page.waitForTimeout(100);
@@ -309,7 +311,7 @@ await safeRun('A 利き手（844×390）', async () => {
   await page.evaluate(() => { window.__game.S.cpu.decide = () => window.Core.emptyInput(); });
   await page.waitForTimeout(300);
   const L1 = await layOf(page);
-  check('A タイトルで選んだ左利きが試合に引き継がれる（攻撃の列が入れ替わる）', flipAttack(B, L1), fmt(L1));
+  check('A タイトルで選んだ左利きが試合に引き継がれる（左に 2×2、右に ◀ ▶ と必殺）', leftSwap(B, L1), fmt(L1));
   check('A 試合中のバーに ⇄ がない', (await page.evaluate(() => document.getElementById('btnHand') === null)));
   await page.tap('#btnPause'); await page.waitForTimeout(150);
   check('A 一時停止の画面に「利き手を変える」がある', (await isOn(page, 'scrPause')) && (await page.evaluate(() => !!document.querySelector('[data-act=hand-ask]'))));
@@ -344,7 +346,7 @@ await safeRun('A 保存できない環境', async () => {
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.goto(URL_ + '?seed=4');
   await page.tap('#btnHandTitle'); await page.waitForTimeout(100);
-  check('A 保存できない環境でも、タイトルの切り替えで攻撃の列が入れ替わる', (await handData(page)) === 'left' && flipAttack(B, await layOf(page)), `data-hand ${await handData(page)}`);
+  check('A 保存できない環境でも、タイトルの切り替えで左利きの配置になる', (await handData(page)) === 'left' && leftSwap(B, await layOf(page)), `data-hand ${await handData(page)}`);
   check('A 保存できない環境で例外 0 件', errors.length === 0, errors.join(' | '));
   await ctx.close();
 });
@@ -413,5 +415,27 @@ await safeRun('D 安全領域', async () => {
   }
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+// ---------- E：左利きの配置（SPEC 条件 7：左に 守・JUMP・強・弱、右に ◀ ▶ と必殺）----------
+for (const [label, w, h] of [['縦 390×844', 390, 844], ['横 844×390', 844, 390], ['小さい横 667×375', 667, 375]]) {
+  await safeRun(`E ${label} 左利き`, async () => {
+    const base = await baseOf(w, h);
+    const { ctx, page, errors } = await newPage(w, h);
+    await page.tap('#btnHandTitle'); await page.waitForTimeout(100);
+    const L = await layOf(page);
+    check(`E ${label}：左利きの配置（左に 守・JUMP・強・弱、右に ◀ ▶ と必殺）`, leftSwap(base, L), fmt(L));
+    await startFight(page);
+    const R = await rectsOf(page);
+    check(`E ${label}：左利き：ボタン 7 個が画面内・44×44 px 以上・重ならない`,
+      KEYS.every(k => inView(R[k], w, h) && R[k].w >= 44 && R[k].h >= 44) && pairsOverlap(R).length === 0,
+      KEYS.filter(k => !inView(R[k], w, h) || R[k].w < 44 || R[k].h < 44).join(',') + ' 重なり ' + pairsOverlap(R).join(' '));
+    if (h >= w) {
+      const g = L.left.x - (L.light.x + L.light.w);
+      check(`E ${label}：左利き：弱 と ◀ の水平の間隔が 24 px 以上`, g >= 24 - 0.5, `${g.toFixed(1)} px`);
+    }
+    check(`E ${label}：左利き：例外 0 件`, errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  });
+}
 await browser.close();
 done('mobile');

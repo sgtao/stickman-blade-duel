@@ -953,16 +953,16 @@
         top.style.display = 'flex'; place(top, sa.l, 6, Math.max(0, cx - BOARD_GAP - sa.l), 40); top.querySelector('.name').style.display = 'none';
       } else top.querySelector('.name').style.display = '';
     }
-    // 左利き：◀▶（left・right・super）は左下のまま動かさない（左右の配置は変えない）。
-    // 攻撃の 2×2 は右側のままにし、列だけを入れ替える（外側の列＝ジャンプ・弱、内側の列＝守・強）。段（y）と大きさは変えない
-    const ATTACK_COLS = { jump: 'out', light: 'out', guard: 'in', heavy: 'in' };
-    const outX = spots.guard ? spots.guard[0] : 0, inX = spots.jump ? spots.jump[0] : 0;
-    for (const k of Object.keys(spots)) {
-      const [x, y, w, h] = spots[k];
-      let nx = x;
-      if (hand === 'left' && ATTACK_COLS[k]) nx = ATTACK_COLS[k] === 'out' ? outX : inX;
-      place(pads[k], nx, y, w, h);
+    // 左利き（SPEC 条件 7）：攻撃の 2×2 の塊を左端へ、◀ ▶ と必殺の塊を右端へ移す（段と大きさは変えない）。
+    // 2×2 の列は左が 守・強、右が ジャンプ・弱。右利きの配置を基にして、x だけを移す
+    if (hand === 'left') {
+      const dxL = spots.left[0] - spots.jump[0]; // 2×2 の塊を左の余白へ
+      const dxR = (spots.guard[0] + spots.guard[2]) - (spots.right[0] + spots.right[2]); // ◀ ▶ の塊を右の余白へ
+      const nx = { guard: spots.jump[0] + dxL, heavy: spots.light[0] + dxL, jump: spots.guard[0] + dxL, light: spots.heavy[0] + dxL,
+        left: spots.left[0] + dxR, right: spots.right[0] + dxR, super: spots.super[0] + dxR };
+      for (const k of Object.keys(nx)) spots[k][0] = nx[k];
     }
+    for (const k of Object.keys(spots)) place(pads[k], ...spots[k]);
     if (!touchMode || vh >= vw) top.style.display = 'flex';
     if (!(touchMode && vh < vw)) top.querySelector('.name').style.display = '';
     place(canvas, cx, cy, cw, ch);
