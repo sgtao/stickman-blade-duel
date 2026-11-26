@@ -76,6 +76,8 @@
   }
   /* 縦持ちのスマホ：試合以外の画面は枠を画面の下まで広げ（app.js の layout）、内容を少し下に寄せて下半分の空きを減らす */
   @media (orientation: portrait) { body.touch .screen { padding-top: 4cqh; } }
+  /* 縦持ちでは、一時停止・消音を 44 px の高さにする（横持ちは上の帯が 40 px で、ボタンと操作が重なるため 36 px のまま） */
+  @media (orientation: portrait) { .tbtn { height: 44px; } }
 </style>
 </head>
 <body>
